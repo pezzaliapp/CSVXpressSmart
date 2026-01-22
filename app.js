@@ -11,6 +11,173 @@ let articoliAggiunti = [];
 let autoPopolaCosti = true;
 let mostraDettagliServizi = true;
 
+// -------------------- CSV MEMORY (IndexedDB) --------------------
+const CSV_DB_NAME = 'csvxpresssmart_db_v1';
+const CSV_STORE = 'kv';
+const CSV_KEY = 'last_csv_payload';
+
+function openCsvDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(CSV_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(CSV_STORE)) {
+        db.createObjectStore(CSV_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbSet(key, value) {
+  const db = await openCsvDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CSV_STORE, 'readwrite');
+    tx.objectStore(CSV_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function idbGet(key) {
+  const db = await openCsvDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CSV_STORE, 'readonly');
+    const req = tx.objectStore(CSV_STORE).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbDel(key) {
+  const db = await openCsvDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CSV_STORE, 'readwrite');
+    tx.objectStore(CSV_STORE).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function csvFingerprintFromFile(file) {
+  if (!file) return null;
+  return `${file.name}|${file.size}|${file.lastModified}`;
+}
+
+function formatDateTime(ts) {
+  try {
+    return new Date(ts).toLocaleString('it-IT');
+  } catch (_) {
+    return '';
+  }
+}
+
+function updateSavedCsvInfoUI(payload) {
+  const info = document.getElementById('savedCsvInfo');
+  if (!info) return;
+
+  if (!payload || !payload.listino?.length) {
+    info.textContent = 'Nessun CSV salvato.';
+    return;
+  }
+
+  const name = payload.meta?.name ? `“${payload.meta.name}”` : 'CSV';
+  const when = payload.savedAt ? formatDateTime(payload.savedAt) : '';
+  const rows = payload.listino?.length || 0;
+
+  info.textContent = `Salvato: ${name} • Righe: ${rows}${when ? ' • ' + when : ''}`;
+}
+
+async function saveLastCsvPayload({ listinoRows, meta }) {
+  const remember = document.getElementById('toggleRememberCSV');
+  if (remember && !remember.checked) return;
+
+  const payload = {
+    savedAt: Date.now(),
+    meta: meta || {},
+    listino: listinoRows || []
+  };
+
+  try {
+    await idbSet(CSV_KEY, payload);
+    updateSavedCsvInfoUI(payload);
+  } catch (e) {
+    console.warn('Impossibile salvare CSV in IndexedDB:', e);
+  }
+}
+
+async function loadLastCsvPayload() {
+  try {
+    return await idbGet(CSV_KEY);
+  } catch (e) {
+    console.warn('Impossibile leggere CSV da IndexedDB:', e);
+    return null;
+  }
+}
+
+async function clearLastCsvPayload() {
+  try {
+    await idbDel(CSV_KEY);
+  } catch (e) {
+    console.warn('Impossibile cancellare CSV da IndexedDB:', e);
+  }
+  updateSavedCsvInfoUI(null);
+}
+
+async function tryAutoLoadSavedCsvOnStart() {
+  const payload = await loadLastCsvPayload();
+  updateSavedCsvInfoUI(payload);
+
+  if (payload && Array.isArray(payload.listino) && payload.listino.length) {
+    listino = payload.listino;
+    document.getElementById("csvError").style.display = "none";
+    aggiornaListinoSelect();
+  }
+}
+
+function bindCsvMemoryUI() {
+  const btnLoad = document.getElementById('btnLoadSavedCSV');
+  const btnClear = document.getElementById('btnClearSavedCSV');
+
+  if (btnLoad) {
+    btnLoad.addEventListener('click', async () => {
+      const payload = await loadLastCsvPayload();
+      if (!payload || !payload.listino?.length) {
+        alert('Nessun CSV salvato trovato.');
+        return;
+      }
+      listino = payload.listino;
+      document.getElementById("csvError").style.display = "none";
+      aggiornaListinoSelect();
+      updateSavedCsvInfoUI(payload);
+    });
+  }
+
+  if (btnClear) {
+    btnClear.addEventListener('click', async () => {
+      await clearLastCsvPayload();
+      alert('CSV salvato cancellato.');
+    });
+  }
+
+  loadLastCsvPayload().then(updateSavedCsvInfoUI).catch(() => {});
+}
+
+function normalizeListino(rows) {
+  return rows.map(row => ({
+    codice: (row["Codice"] || "").trim(),
+    descrizione: (row["Descrizione"] || "").trim(),
+    prezzoLordo: parseFloat((row["PrezzoLordo"] || "0").replace(",", ".")) || 0,
+    sconto: 0,
+    sconto2: 0,
+    margine: 0,
+    costoTrasporto: parseFloat((row["CostoTrasporto"] || "0").replace(",", ".")) || 0,
+    costoInstallazione: parseFloat((row["CostoInstallazione"] || "0").replace(",", ".")) || 0,
+    quantita: 1
+  }));
+}
+
 // --- SMART SETTINGS (nuovi)
 const SMART_KEY = 'csvxpresssmart_settings_v1';
 let smartSettings = {
@@ -80,12 +247,15 @@ function updateEquivalentDiscountDisplay() {
   let eq = (1 - (final / base)) * 100;
   eq = clamp(eq, -9999, 9999); // sicurezza
 
-  // 2 decimali, con virgola italiana se vuoi:
   el.textContent = `${eq.toFixed(2)}%`;
 }
 
 document.addEventListener("DOMContentLoaded", function () {
   loadSmartSettings();
+
+  // CSV memory UI + autoload (se presente)
+  bindCsvMemoryUI();
+  tryAutoLoadSavedCsvOnStart();
 
   document.getElementById("csvFileInput").addEventListener("change", handleCSVUpload);
   document.getElementById("searchListino").addEventListener("input", aggiornaListinoSelect);
@@ -120,7 +290,6 @@ document.addEventListener("DOMContentLoaded", function () {
   // UI info
   updateEquivalentDiscountDisplay();
 });
-
 function bindSmartControls() {
   const elSmart = document.getElementById('toggleSmartMode');
   const elVat = document.getElementById('toggleShowVAT');
@@ -236,17 +405,19 @@ function handleCSVUpload(event) {
         return;
       }
 
-      listino = results.data.map(row => ({
-        codice: (row["Codice"] || "").trim(),
-        descrizione: (row["Descrizione"] || "").trim(),
-        prezzoLordo: parseFloat((row["PrezzoLordo"] || "0").replace(",", ".")) || 0,
-        sconto: 0,
-        sconto2: 0,
-        margine: 0,
-        costoTrasporto: parseFloat((row["CostoTrasporto"] || "0").replace(",", ".")) || 0,
-        costoInstallazione: parseFloat((row["CostoInstallazione"] || "0").replace(",", ".")) || 0,
-        quantita: 1
-      }));
+      // ✅ mapping coerente e riusabile
+      listino = normalizeListino(results.data);
+
+      // ✅ salva in locale (se toggleRememberCSV è checked)
+      saveLastCsvPayload({
+        listinoRows: listino,
+        meta: {
+          name: file.name,
+          size: file.size,
+          lastModified: file.lastModified,
+          fp: csvFingerprintFromFile(file)
+        }
+      });
 
       const rows = listino.length;
       const cols = Array.isArray(results.meta?.fields) ? results.meta.fields.length : undefined;
@@ -389,7 +560,6 @@ function rimuoviArticolo(index) {
   aggiornaTotaliGenerali();
   updateEquivalentDiscountDisplay();
 }
-
 function aggiornaTotaliGenerali() {
   let totaleSenzaServizi = 0;   // “conMargine” * qta
   let totaleConServizi = 0;     // granTot riga
@@ -599,7 +769,6 @@ function generaReportSmartCliente() {
   return report;
 }
 
-// Report “standard”
 function generaReportTesto() {
   if (smartSettings.smartMode) return generaReportSmartCliente();
 
@@ -622,10 +791,8 @@ function generaReportTesto() {
 
     report += `${index + 1}. Codice: ${articolo.codice}\n`;
     report += `Descrizione: ${articolo.descrizione}\n`;
-    // ✅ tolto "(dopo sconto)"
     report += `Prezzo netto: ${r.totaleNettoUnit.toFixed(2)}€\n`;
 
-    // ✅ sconti omissibili SOLO nel report
     if (!smartSettings.hideDiscounts) {
       report += `Sconto 1: ${r.sconto1}%\n`;
       report += `Sconto 2: ${r.sconto2}%\n`;
@@ -695,7 +862,6 @@ function generaPDFReport() {
   document.body.removeChild(link);
 }
 
-// “Senza Margine”
 function generaReportTestoSenzaMargine() {
   if (smartSettings.smartMode) return generaReportSmartCliente();
 
@@ -721,10 +887,8 @@ function generaReportTestoSenzaMargine() {
 
     report += `${index + 1}. Codice: ${articolo.codice}\n`;
     report += `Descrizione: ${articolo.descrizione}\n`;
-    // ✅ tolto "(dopo sconto)"
     report += `Prezzo netto: ${prezzoScontato.toFixed(2)}€\n`;
 
-    // ✅ sconti omissibili SOLO nel report
     if (!smartSettings.hideDiscounts) {
       report += `Sconto 1: ${sconto1}%\n`;
       report += `Sconto 2: ${sconto2}%\n`;
