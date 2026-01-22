@@ -43,6 +43,47 @@ function saveSmartSettings() {
   } catch (_) {}
 }
 
+/**
+ * SCONTO EQUIVALENTE CLIENTE (sempre visibile, solo UI, NON report)
+ * Calcolo "per righe" e ponderato:
+ *  - Base: Somma(listino lordo * qta)
+ *  - Finale: Somma(prezzo con margine * qta)  [SERVIZI ESCLUSI: è coerente con l’esempio 1000 -> 400 -> 571,43]
+ *  - Sconto eq % = (1 - Finale/Base) * 100
+ *
+ * Nota: uso i valori già arrotondati da computeRow (conMargineUnit a 2 decimali),
+ * così ciò che vedi è coerente con i numeri della tabella.
+ */
+function updateEquivalentDiscountDisplay() {
+  const el = document.getElementById('smartEquivalentDiscount');
+  if (!el) return;
+
+  let base = 0;   // listino lordo
+  let final = 0;  // prezzo cliente equivalente (dopo sconti + margine), servizi esclusi
+
+  articoliAggiunti.forEach(a => {
+    const qta = a.quantita || 1;
+    const prezzoLordo = a.prezzoLordo || 0;
+
+    const r = computeRow(a); // r.conMargineUnit è già roundTwo
+    base += (prezzoLordo * qta);
+    final += (r.conMargineUnit * qta);
+  });
+
+  base = roundTwo(base);
+  final = roundTwo(final);
+
+  if (!base || base <= 0) {
+    el.textContent = '—';
+    return;
+  }
+
+  let eq = (1 - (final / base)) * 100;
+  eq = clamp(eq, -9999, 9999); // sicurezza
+
+  // 2 decimali, con virgola italiana se vuoi:
+  el.textContent = `${eq.toFixed(2)}%`;
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   loadSmartSettings();
 
@@ -75,6 +116,9 @@ document.addEventListener("DOMContentLoaded", function () {
   aggiornaTabellaArticoli();
   aggiornaTotaliGenerali();
   applyColumnVisibility();
+
+  // UI info
+  updateEquivalentDiscountDisplay();
 });
 
 function bindSmartControls() {
@@ -106,11 +150,12 @@ function bindSmartControls() {
     smartSettings.hideDiscounts = !!elHideDiscounts?.checked;
 
     saveSmartSettings();
-    window.track?.smart_toggle({ key: 'settings', val: JSON.stringify(smartSettings) });
+    window.track?.smart_toggle?.({ key: 'settings', val: JSON.stringify(smartSettings) });
 
     applyColumnVisibility();
     aggiornaTabellaArticoli();
     aggiornaTotaliGenerali();
+    updateEquivalentDiscountDisplay();
   };
 
   [elSmart, elVat, elVatRate, elHideVenduto, elHideDiff, elHideDiscounts]
@@ -144,7 +189,7 @@ function setColHidden(colKey, hidden) {
   document.querySelectorAll(`th[data-col="${colKey}"]`).forEach(th => {
     th.classList.toggle('col-hidden', !!hidden);
   });
-  // body cells (mappati dopo render: uso data-col in TD)
+  // body cells
   document.querySelectorAll(`td[data-col="${colKey}"]`).forEach(td => {
     td.classList.toggle('col-hidden', !!hidden);
   });
@@ -167,14 +212,15 @@ function togglePopolaCosti() {
 
   aggiornaTabellaArticoli();
   aggiornaTotaliGenerali();
+  updateEquivalentDiscountDisplay();
 }
 
 function handleCSVUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  window.track?.csv_upload_start({ method: 'file_input' });
-  window.track?.csv_upload_ok({ method: 'file_input', file });
+  window.track?.csv_upload_start?.({ method: 'file_input' });
+  window.track?.csv_upload_ok?.({ method: 'file_input', file });
 
   const t0 = performance.now();
 
@@ -186,7 +232,7 @@ function handleCSVUpload(event) {
 
       if (!results.data.length) {
         document.getElementById("csvError").style.display = "block";
-        window.track?.csv_parse_error({ code: 'empty_or_no_rows', ms });
+        window.track?.csv_parse_error?.({ code: 'empty_or_no_rows', ms });
         return;
       }
 
@@ -204,7 +250,7 @@ function handleCSVUpload(event) {
 
       const rows = listino.length;
       const cols = Array.isArray(results.meta?.fields) ? results.meta.fields.length : undefined;
-      window.track?.csv_parse_ok({ rows, cols, ms });
+      window.track?.csv_parse_ok?.({ rows, cols, ms });
 
       document.getElementById("csvError").style.display = "none";
       aggiornaListinoSelect();
@@ -213,7 +259,7 @@ function handleCSVUpload(event) {
       const ms = Math.round(performance.now() - t0);
       console.error("Errore CSV:", err);
       document.getElementById("csvError").style.display = "block";
-      window.track?.csv_parse_error({ code: 'papaparse_error', ms });
+      window.track?.csv_parse_error?.({ code: 'papaparse_error', ms });
     }
   });
 }
@@ -234,7 +280,7 @@ function aggiornaListinoSelect() {
 }
 
 function aggiungiArticoloDaListino() {
-  window.track?.add_item_listino();
+  window.track?.add_item_listino?.();
 
   const select = document.getElementById("listinoSelect");
   if (!select.value) return;
@@ -254,6 +300,7 @@ function aggiungiArticoloDaListino() {
   articoliAggiunti.push(nuovoArticolo);
   aggiornaTabellaArticoli();
   aggiornaTotaliGenerali();
+  updateEquivalentDiscountDisplay();
 }
 
 function computeRow(articolo) {
@@ -315,7 +362,6 @@ function aggiornaTabellaArticoli() {
     tableBody.appendChild(row);
   });
 
-  // ri-applico visibilità colonne dopo re-render
   applyColumnVisibility();
 }
 
@@ -329,16 +375,19 @@ function aggiornaCampo(event) {
   if (field === "quantita" && val < 1) val = 1;
 
   articoliAggiunti[index][field] = val;
+
   aggiornaTabellaArticoli();
   aggiornaTotaliGenerali();
+  updateEquivalentDiscountDisplay();
 }
 
 function rimuoviArticolo(index) {
-  window.track?.remove_item();
+  window.track?.remove_item?.();
 
   articoliAggiunti.splice(index, 1);
   aggiornaTabellaArticoli();
   aggiornaTotaliGenerali();
+  updateEquivalentDiscountDisplay();
 }
 
 function aggiornaTotaliGenerali() {
@@ -460,7 +509,7 @@ function calcolaRigaManuale() {
 }
 
 function aggiungiArticoloManuale() {
-  window.track?.add_item_manual();
+  window.track?.add_item_manual?.();
 
   const codice = document.getElementById("manualCodice").value.trim();
   const descrizione = document.getElementById("manualDescrizione").value.trim();
@@ -489,6 +538,7 @@ function aggiungiArticoloManuale() {
   articoliAggiunti.push(nuovoArticolo);
   aggiornaTabellaArticoli();
   aggiornaTotaliGenerali();
+  updateEquivalentDiscountDisplay();
   annullaArticoloManuale();
 }
 
@@ -625,7 +675,7 @@ function generaReportTesto() {
 }
 
 function inviaReportWhatsApp() {
-  window.track?.report_whatsapp({ variant: smartSettings.smartMode ? 'smart' : 'standard' });
+  window.track?.report_whatsapp?.({ variant: smartSettings.smartMode ? 'smart' : 'standard' });
 
   const report = generaReportTesto();
   const whatsappUrl = "https://api.whatsapp.com/send?text=" + encodeURIComponent(report);
@@ -633,7 +683,7 @@ function inviaReportWhatsApp() {
 }
 
 function generaPDFReport() {
-  window.track?.csv_export({ format: smartSettings.smartMode ? 'txt_smart' : 'txt_standard' });
+  window.track?.csv_export?.({ format: smartSettings.smartMode ? 'txt_smart' : 'txt_standard' });
 
   const report = generaReportTesto();
   const blob = new Blob([report], { type: "text/plain" });
@@ -709,7 +759,7 @@ function generaReportTestoSenzaMargine() {
 }
 
 function inviaReportWhatsAppSenzaMargine() {
-  window.track?.report_whatsapp({ variant: smartSettings.smartMode ? 'smart' : 'no_margin' });
+  window.track?.report_whatsapp?.({ variant: smartSettings.smartMode ? 'smart' : 'no_margin' });
 
   const report = generaReportTestoSenzaMargine();
   const whatsappUrl = "https://api.whatsapp.com/send?text=" + encodeURIComponent(report);
@@ -717,7 +767,7 @@ function inviaReportWhatsAppSenzaMargine() {
 }
 
 function generaTXTReportSenzaMargine() {
-  window.track?.csv_export({ format: smartSettings.smartMode ? 'txt_smart' : 'txt_no_margin' });
+  window.track?.csv_export?.({ format: smartSettings.smartMode ? 'txt_smart' : 'txt_no_margin' });
 
   const report = generaReportTestoSenzaMargine();
   const blob = new Blob([report], { type: "text/plain" });
