@@ -584,7 +584,7 @@ function generaReportTesto() {
 
     report += `${index + 1}. Codice: ${articolo.codice}\n`;
     report += `Descrizione: ${articolo.descrizione}\n`;
-    report += `Prezzo netto (dopo sconto): ${r.totaleNettoUnit.toFixed(2)}€\n`;
+    report += `Prezzo netto: ${r.totaleNettoUnit.toFixed(2)}€\n`;
 
     if (!smartSettings.hideDiscounts) {
       report += `Sconto 1: ${r.sconto1}%\n`;
@@ -682,7 +682,7 @@ function generaReportTestoSenzaMargine() {
 
     report += `${index + 1}. Codice: ${articolo.codice}\n`;
     report += `Descrizione: ${articolo.descrizione}\n`;
-    report += `Prezzo netto (dopo sconto): ${prezzoScontato.toFixed(2)}€\n`;
+    report += `Prezzo netto: ${prezzoScontato.toFixed(2)}€\n`;
 
     if (!smartSettings.hideDiscounts) {
       report += `Sconto 1: ${sconto1}%\n`;
