@@ -19,6 +19,7 @@ let smartSettings = {
   vatRate: 22,
   hideVenduto: true,
   hideDiff: true,
+  // ✅ questo ora vale SOLO per il report (non per la tabella)
   hideDiscounts: true
 };
 
@@ -101,6 +102,7 @@ function bindSmartControls() {
 
     smartSettings.hideVenduto = !!elHideVenduto?.checked;
     smartSettings.hideDiff = !!elHideDiff?.checked;
+    // ✅ sconti: SOLO report
     smartSettings.hideDiscounts = !!elHideDiscounts?.checked;
 
     saveSmartSettings();
@@ -115,7 +117,7 @@ function bindSmartControls() {
     .filter(Boolean)
     .forEach(el => el.addEventListener('change', onChange));
 
-  // UX: se attivo Smart mode, di default nascondo venduto/diff/sconti (se l’utente non ha scelto)
+  // UX: se attivo Smart mode, di default nascondo venduto/diff/sconti nel report
   if (smartSettings.smartMode) {
     smartSettings.hideVenduto = true;
     smartSettings.hideDiff = true;
@@ -125,21 +127,16 @@ function bindSmartControls() {
 }
 
 function applyColumnVisibility() {
-  // logica: in Smart mode nascondiamo sempre "azioni"? NO (ti serve). Lasciamole.
-  const hideDiscounts = smartSettings.smartMode ? true : smartSettings.hideDiscounts;
+  // ✅ SCONTI SEMPRE VISIBILI IN TABELLA: NON li tocchiamo più qui.
   const hideVenduto = smartSettings.smartMode ? true : smartSettings.hideVenduto;
   const hideDiff = smartSettings.smartMode ? true : smartSettings.hideDiff;
-
-  // colonne sempre “interne” in smart
-  setColHidden('sconto1', hideDiscounts);
-  setColHidden('sconto2', hideDiscounts);
 
   setColHidden('venduto', hideVenduto);
   setColHidden('diff', hideDiff);
 
-  // opzionale: in smart potresti voler nascondere anche margine e prezzo lordo
-  setColHidden('margine', smartSettings.smartMode);      // interno
-  setColHidden('prezzoLordo', smartSettings.smartMode);  // interno
+  // opzionale: in smart nascondo margine e prezzo lordo (interno)
+  setColHidden('margine', smartSettings.smartMode);
+  setColHidden('prezzoLordo', smartSettings.smartMode);
 }
 
 function setColHidden(colKey, hidden) {
@@ -277,7 +274,6 @@ function computeRow(articolo) {
   const differenza = roundTwo(venduto - granTotRiga);
 
   // “Netto/cad” per SMART (cliente):
-  // uso il totale riga / qta (in pratica prezzo unitario finale “pronto”, inclusi servizi spalmati)
   const nettoCadSmart = roundTwo(granTotRiga / qta);
 
   return { sconto1, sconto2, totaleNettoUnit, conMargineUnit, qta, serviziUnit, granTotRiga, venduto, differenza, nettoCadSmart };
@@ -361,7 +357,6 @@ function aggiornaTotaliGenerali() {
     totaleDifferenzaSconto += r.differenza;
   });
 
-  // base imponibile che uso per IVA: se autoPopolaCosti è attivo, considero totaleConServizi, altrimenti totaleSenzaServizi
   const imponibile = autoPopolaCosti ? roundTwo(totaleConServizi) : roundTwo(totaleSenzaServizi);
   const vatRate = clamp(parseFloat(String(smartSettings.vatRate ?? 22).replace(',', '.')) || 0, 0, 100);
   const iva = roundTwo(imponibile * (vatRate / 100));
@@ -375,7 +370,6 @@ function aggiornaTotaliGenerali() {
     document.getElementById("report-section").insertAdjacentElement("beforebegin", totaleDiv);
   }
 
-  // In Smart mode: stringhe più “cliente”
   const smart = !!smartSettings.smartMode;
 
   let html = "";
@@ -394,7 +388,6 @@ function aggiornaTotaliGenerali() {
     }
   }
 
-  // Se non smart, ma showVAT attivo, aggiungo comunque (utile anche internamente)
   if (!smart && smartSettings.showVAT) {
     html += `<br><br><strong>Imponibile:</strong> ${imponibile.toFixed(2)}€<br>`;
     html += `<strong>IVA (${vatRate.toFixed(1)}%):</strong> ${iva.toFixed(2)}€<br>`;
@@ -404,7 +397,7 @@ function aggiornaTotaliGenerali() {
   totaleDiv.innerHTML = html;
 }
 
-// --- Funzioni per aggiunta manuale articoli (restano, ma in smart verranno nascoste colonne via applyColumnVisibility)
+// --- Funzioni per aggiunta manuale articoli
 
 function mostraFormArticoloManuale() {
   const tableBody = document.querySelector("#articoli-table tbody");
@@ -507,9 +500,7 @@ function annullaArticoloManuale() {
 // -------------------- REPORTS --------------------
 
 function generaReportSmartCliente() {
-  // Report “pulito” per cliente
   let report = "PREVENTIVO / ORDINE\n\n";
-
   let imponibile = 0;
 
   const checkboxServizi = document.getElementById("toggleMostraServizi");
@@ -518,8 +509,7 @@ function generaReportSmartCliente() {
   articoliAggiunti.forEach((articolo, index) => {
     const r = computeRow(articolo);
 
-    // In smart: prezzo netto/cad + quantità + totale riga
-    const nettoCad = r.nettoCadSmart; // vedi computeRow
+    const nettoCad = r.nettoCadSmart;
     const qta = r.qta;
     const totRiga = r.granTotRiga;
 
@@ -532,7 +522,6 @@ function generaReportSmartCliente() {
     if (mostraServizi) {
       const tr = roundTwo(articolo.costoTrasporto || 0);
       const ins = roundTwo(articolo.costoInstallazione || 0);
-      // Solo se non zero
       if (tr !== 0 || ins !== 0) {
         report += `Servizi: Trasporto ${tr.toFixed(2)}€  |  Installazione ${ins.toFixed(2)}€\n`;
       }
@@ -560,9 +549,8 @@ function generaReportSmartCliente() {
   return report;
 }
 
-// Report “standard” (come prima) — ma con possibilità di omettere sconti / venduto / diff se flag attivi
+// Report “standard”
 function generaReportTesto() {
-  // Se Smart Mode: genero direttamente il report cliente
   if (smartSettings.smartMode) return generaReportSmartCliente();
 
   let report = "Report Articoli:\n\n";
@@ -584,8 +572,10 @@ function generaReportTesto() {
 
     report += `${index + 1}. Codice: ${articolo.codice}\n`;
     report += `Descrizione: ${articolo.descrizione}\n`;
+    // ✅ tolto "(dopo sconto)"
     report += `Prezzo netto: ${r.totaleNettoUnit.toFixed(2)}€\n`;
 
+    // ✅ sconti omissibili SOLO nel report
     if (!smartSettings.hideDiscounts) {
       report += `Sconto 1: ${r.sconto1}%\n`;
       report += `Sconto 2: ${r.sconto2}%\n`;
@@ -619,7 +609,6 @@ function generaReportTesto() {
     report += `Totale Differenza Sconto: ${sommaDifferenze.toFixed(2)}€\n`;
   }
 
-  // IVA opzionale anche in standard
   if (smartSettings.showVAT) {
     const imponibile = autoPopolaCosti ? roundTwo(totaleConServizi) : roundTwo(totaleSenzaServizi);
     const vatRate = clamp(parseFloat(String(smartSettings.vatRate ?? 22).replace(',', '.')) || 0, 0, 100);
@@ -656,7 +645,7 @@ function generaPDFReport() {
   document.body.removeChild(link);
 }
 
-// “Senza Margine”: se SmartMode attivo ha già senso poco (ma lo mantengo).
+// “Senza Margine”
 function generaReportTestoSenzaMargine() {
   if (smartSettings.smartMode) return generaReportSmartCliente();
 
@@ -682,8 +671,10 @@ function generaReportTestoSenzaMargine() {
 
     report += `${index + 1}. Codice: ${articolo.codice}\n`;
     report += `Descrizione: ${articolo.descrizione}\n`;
+    // ✅ tolto "(dopo sconto)"
     report += `Prezzo netto: ${prezzoScontato.toFixed(2)}€\n`;
 
+    // ✅ sconti omissibili SOLO nel report
     if (!smartSettings.hideDiscounts) {
       report += `Sconto 1: ${sconto1}%\n`;
       report += `Sconto 2: ${sconto2}%\n`;
