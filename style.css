@@ -1,128 +1,266 @@
-body {
+/* =========================
+   CSVXpressSmart — style.css
+   Fix: tabella centrata, colonne allineate, input decimali comodi
+   ========================= */
+
+:root{
+  --bg:#f4f4f4;
+  --panel:#ffffff;
+  --text:#333;
+  --muted:#6b7280;
+  --brand:#2196f3;
+  --brand2:#1976d2;
+  --line:rgba(0,0,0,.12);
+  --soft:#f7fbff;
+}
+
+*{ box-sizing:border-box; }
+
+body{
   font-family: Arial, sans-serif;
   margin: 0;
   padding: 0;
-  background-color: #f4f4f4;
-  color: #333;
+  background-color: var(--bg);
+  color: var(--text);
 }
 
-header {
-  background-color: #2196f3;
-  color: white;
+header{
+  background-color: var(--brand);
+  color: #fff;
   padding: 1em;
   text-align: center;
 }
 
-.logo-container {
+.logo-container{
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
 }
 
-.logo {
+.logo{
   height: 40px;
   width: 40px;
 }
 
-main {
+main{
   padding: 1em;
-  max-width: 900px;
+  max-width: 1200px; /* ✅ più largo per evitare “decentramenti” */
   margin: auto;
-  background-color: white;
-  box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
+  background-color: var(--panel);
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
 }
 
-section {
-  margin-bottom: 2em;
-}
+section{ margin-bottom: 2em; }
 
+/* ====== Form controls ====== */
 input[type="file"],
 input[type="text"],
 input[type="number"],
 select,
-button {
+button{
   display: block;
   margin-top: 0.5em;
   margin-bottom: 1em;
-  padding: 0.5em;
+  padding: 0.55em 0.6em;
   width: 100%;
-  max-width: 400px;
+  max-width: 520px; /* ✅ un po’ più comodo */
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
 }
 
-input[type="checkbox"] {
-  margin-right: 0.5em;
+input[type="text"]:focus,
+input[type="number"]:focus,
+select:focus{
+  outline: none;
+  border-color: rgba(33,150,243,.55);
+  box-shadow: 0 0 0 3px rgba(33,150,243,.15);
 }
 
-#articoli-table {
-  width: 100%;
-  border-collapse: collapse;
-}
+input[type="checkbox"]{ margin-right: 0.5em; }
 
-#articoli-table th,
-#articoli-table td {
-  padding: 0.5em;
-  text-align: center;
-}
-
-#articoli-table input[type="number"] {
-  width: 80px;
-  text-align: right;
-}
-
-button {
-  background-color: #2196f3;
+/* ====== Buttons ====== */
+button{
+  background-color: var(--brand);
   color: white;
   border: none;
   cursor: pointer;
   font-weight: bold;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.2s ease, transform .05s ease;
 }
 
-button:hover {
-  background-color: #1976d2;
-}
+button:hover{ background-color: var(--brand2); }
+button:active{ transform: translateY(1px); }
 
-#totaleGenerale {
+/* ====== Totali ====== */
+#totaleGenerale{
   background-color: #f0f8ff;
-  border: 1px solid #2196f3;
+  border: 1px solid rgba(33,150,243,.55);
   padding: 1em;
   margin-bottom: 1em;
-  font-size: 1.1em;
+  font-size: 1.05em;
   line-height: 1.6;
+  border-radius: 10px;
 }
 
-/* --- SMART UI --- */
+/* =========================
+   SMART UI
+   ========================= */
 .smart-controls{
   border: 1px solid rgba(33,150,243,.35);
-  background: #f7fbff;
+  background: var(--soft);
   padding: 12px;
   border-radius: 10px;
   margin: 12px 0 18px;
 }
+
 .smart-controls h3{
   margin: 0 0 10px;
   font-size: 1.02em;
 }
+
 .smart-controls .chk{
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 8px 0;
-  max-width: 520px;
+  max-width: 640px;
 }
+
 .smart-controls .vat-row{
   display: flex;
   align-items: center;
   gap: 10px;
   margin: 8px 0 10px;
 }
+
+.smart-controls .vat-row label{
+  margin: 0;
+  white-space: nowrap;
+}
+
 .smart-controls .vat-row input{
-  max-width: 110px;
+  max-width: 120px;
   margin: 0;
 }
 
+/* =========================
+   Tabella — FIX allineamento
+   ========================= */
+
+/* ✅ evita che la tabella “sfugga” e consente scroll orizzontale su schermi piccoli */
+#articoli-section{
+  overflow-x: auto;
+}
+
+/* ✅ colonne stabili: header e body sempre allineati */
+#articoli-table{
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 0 auto;
+  background: #fff;
+}
+
+/* Bordo coerente */
+#articoli-table th,
+#articoli-table td{
+  padding: 0.55em 0.6em;
+  text-align: center;
+  border: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+/* Header leggibile */
+#articoli-table th{
+  background: rgba(33,150,243,.08);
+  font-weight: 700;
+}
+
+/* ✅ input sempre dentro la cella e non “spinge” le colonne */
+#articoli-table td input{
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0.4em 0.45em;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,.18);
+  text-align: right;          /* ✅ numeri a destra */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Campi testo (codice/descrizione) */
+#articoli-table td[data-col="codice"],
+#articoli-table td[data-col="descrizione"]{
+  text-align: left;
+}
+
+/* ✅ larghezze consigliate per mantenere stabile l’impaginazione */
+#articoli-table th[data-col="codice"],
+#articoli-table td[data-col="codice"]{ width: 110px; }
+
+#articoli-table th[data-col="descrizione"],
+#articoli-table td[data-col="descrizione"]{ width: 320px; }
+
+#articoli-table th[data-col="prezzoLordo"],
+#articoli-table td[data-col="prezzoLordo"]{ width: 120px; }
+
+#articoli-table th[data-col="sconto1"],
+#articoli-table td[data-col="sconto1"],
+#articoli-table th[data-col="sconto2"],
+#articoli-table td[data-col="sconto2"],
+#articoli-table th[data-col="margine"],
+#articoli-table td[data-col="margine"]{ width: 95px; }
+
+#articoli-table th[data-col="totaleNetto"],
+#articoli-table td[data-col="totaleNetto"]{ width: 120px; }
+
+#articoli-table th[data-col="trasporto"],
+#articoli-table td[data-col="trasporto"],
+#articoli-table th[data-col="installazione"],
+#articoli-table td[data-col="installazione"]{ width: 120px; }
+
+#articoli-table th[data-col="qta"],
+#articoli-table td[data-col="qta"]{ width: 80px; }
+
+#articoli-table th[data-col="granTot"],
+#articoli-table td[data-col="granTot"]{ width: 130px; }
+
+#articoli-table th[data-col="venduto"],
+#articoli-table td[data-col="venduto"]{ width: 130px; }
+
+#articoli-table th[data-col="diff"],
+#articoli-table td[data-col="diff"]{ width: 140px; }
+
+#articoli-table th[data-col="azioni"],
+#articoli-table td[data-col="azioni"]{ width: 110px; }
+
+/* Pulsante rimuovi in tabella */
+#articoli-table td[data-col="azioni"] button{
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0.45em 0.6em;
+}
+
+/* =========================
+   Utility
+   ========================= */
+
 /* hide columns */
-.col-hidden{
-  display: none !important;
+.col-hidden{ display: none !important; }
+
+/* muted helper */
+.muted{ color: var(--muted); }
+
+/* Responsive piccoli schermi */
+@media (max-width: 720px){
+  main{ padding: 12px; }
+  input[type="file"],
+  input[type="text"],
+  input[type="number"],
+  select,
+  button{ max-width: 100%; }
 }
