@@ -11,6 +11,33 @@ let articoliAggiunti = [];
 let autoPopolaCosti = true;
 let mostraDettagliServizi = true;
 
+// -------------------- HELPERS NUMERICI (virgola/decimali) --------------------
+function parseDec(val) {
+  // accetta: "60,43" / "60.43" / "  60,43  " / "" -> 0
+  const s = String(val ?? '').trim().replace(/\s+/g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function fmtDec(num, decimals = 2, trim = true) {
+  // stampa con virgola; utile per non far tornare i punti nei campi input
+  if (!Number.isFinite(num)) return '';
+  let s = Number(num).toFixed(decimals);
+  if (trim) {
+    // rimuove zeri finali e punto finale
+    s = s.replace(/\.?0+$/, '');
+  }
+  return s.replace('.', ',');
+}
+
+function roundTwo(num) {
+  return Math.round(num * 100) / 100;
+}
+
+function clamp(num, min, max) {
+  return Math.max(min, Math.min(max, num));
+}
+
 // -------------------- CSV MEMORY (IndexedDB) --------------------
 const CSV_DB_NAME = 'csvxpresssmart_db_v1';
 const CSV_STORE = 'kv';
@@ -131,7 +158,8 @@ async function tryAutoLoadSavedCsvOnStart() {
 
   if (payload && Array.isArray(payload.listino) && payload.listino.length) {
     listino = payload.listino;
-    document.getElementById("csvError").style.display = "none";
+    const err = document.getElementById("csvError");
+    if (err) err.style.display = "none";
     aggiornaListinoSelect();
   }
 }
@@ -148,7 +176,8 @@ function bindCsvMemoryUI() {
         return;
       }
       listino = payload.listino;
-      document.getElementById("csvError").style.display = "none";
+      const err = document.getElementById("csvError");
+      if (err) err.style.display = "none";
       aggiornaListinoSelect();
       updateSavedCsvInfoUI(payload);
     });
@@ -168,16 +197,15 @@ function normalizeListino(rows) {
   return rows.map(row => ({
     codice: (row["Codice"] || "").trim(),
     descrizione: (row["Descrizione"] || "").trim(),
-    prezzoLordo: parseFloat((row["PrezzoLordo"] || "0").replace(",", ".")) || 0,
+    prezzoLordo: parseDec(row["PrezzoLordo"] || "0"),
     sconto: 0,
     sconto2: 0,
     margine: 0,
-    costoTrasporto: parseFloat((row["CostoTrasporto"] || "0").replace(",", ".")) || 0,
-    costoInstallazione: parseFloat((row["CostoInstallazione"] || "0").replace(",", ".")) || 0,
+    costoTrasporto: parseDec(row["CostoTrasporto"] || "0"),
+    costoInstallazione: parseDec(row["CostoInstallazione"] || "0"),
     quantita: 1
   }));
 }
-
 // --- SMART SETTINGS (nuovi)
 const SMART_KEY = 'csvxpresssmart_settings_v1';
 let smartSettings = {
@@ -190,12 +218,6 @@ let smartSettings = {
   hideDiscounts: true
 };
 
-function roundTwo(num) {
-  return Math.round(num * 100) / 100;
-}
-function clamp(num, min, max) {
-  return Math.max(min, Math.min(max, num));
-}
 function loadSmartSettings() {
   try {
     const raw = localStorage.getItem(SMART_KEY);
@@ -214,24 +236,20 @@ function saveSmartSettings() {
  * SCONTO EQUIVALENTE CLIENTE (sempre visibile, solo UI, NON report)
  * Calcolo "per righe" e ponderato:
  *  - Base: Somma(listino lordo * qta)
- *  - Finale: Somma(prezzo con margine * qta)  [SERVIZI ESCLUSI: è coerente con l’esempio 1000 -> 400 -> 571,43]
+ *  - Finale: Somma(prezzo con margine * qta)  [SERVIZI ESCLUSI]
  *  - Sconto eq % = (1 - Finale/Base) * 100
- *
- * Nota: uso i valori già arrotondati da computeRow (conMargineUnit a 2 decimali),
- * così ciò che vedi è coerente con i numeri della tabella.
  */
 function updateEquivalentDiscountDisplay() {
   const el = document.getElementById('smartEquivalentDiscount');
   if (!el) return;
 
-  let base = 0;   // listino lordo
-  let final = 0;  // prezzo cliente equivalente (dopo sconti + margine), servizi esclusi
+  let base = 0;
+  let final = 0;
 
   articoliAggiunti.forEach(a => {
     const qta = a.quantita || 1;
     const prezzoLordo = a.prezzoLordo || 0;
-
-    const r = computeRow(a); // r.conMargineUnit è già roundTwo
+    const r = computeRow(a);
     base += (prezzoLordo * qta);
     final += (r.conMargineUnit * qta);
   });
@@ -245,7 +263,7 @@ function updateEquivalentDiscountDisplay() {
   }
 
   let eq = (1 - (final / base)) * 100;
-  eq = clamp(eq, -9999, 9999); // sicurezza
+  eq = clamp(eq, -9999, 9999);
 
   el.textContent = `${eq.toFixed(2)}%`;
 }
@@ -260,7 +278,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document.getElementById("csvFileInput").addEventListener("change", handleCSVUpload);
   document.getElementById("searchListino").addEventListener("input", aggiornaListinoSelect);
 
-  // Checkboxes (già presenti) - li lasciamo come sono
+  // Checkboxes (già presenti)
   const checkbox1 = document.createElement("label");
   checkbox1.innerHTML = `
     <input type="checkbox" id="toggleCosti" checked onchange="togglePopolaCosti()"> Popola automaticamente Trasporto e Installazione
@@ -279,7 +297,7 @@ document.addEventListener("DOMContentLoaded", function () {
   manualButton.onclick = mostraFormArticoloManuale;
   document.getElementById("listino-section").appendChild(manualButton);
 
-  // --- SMART UI binding
+  // SMART UI binding
   bindSmartControls();
 
   // Prima render
@@ -287,9 +305,9 @@ document.addEventListener("DOMContentLoaded", function () {
   aggiornaTotaliGenerali();
   applyColumnVisibility();
 
-  // UI info
   updateEquivalentDiscountDisplay();
 });
+
 function bindSmartControls() {
   const elSmart = document.getElementById('toggleSmartMode');
   const elVat = document.getElementById('toggleShowVAT');
@@ -298,7 +316,6 @@ function bindSmartControls() {
   const elHideDiff = document.getElementById('toggleHideDiff');
   const elHideDiscounts = document.getElementById('toggleHideDiscounts');
 
-  // init UI from settings
   if (elSmart) elSmart.checked = !!smartSettings.smartMode;
   if (elVat) elVat.checked = !!smartSettings.showVAT;
   if (elVatRate) elVatRate.value = smartSettings.vatRate ?? 22;
@@ -310,12 +327,11 @@ function bindSmartControls() {
     smartSettings.smartMode = !!elSmart?.checked;
     smartSettings.showVAT = !!elVat?.checked;
 
-    const rate = parseFloat(String(elVatRate?.value || '22').replace(',', '.')) || 0;
+    const rate = parseDec(elVatRate?.value || '22');
     smartSettings.vatRate = clamp(rate, 0, 100);
 
     smartSettings.hideVenduto = !!elHideVenduto?.checked;
     smartSettings.hideDiff = !!elHideDiff?.checked;
-    // ✅ sconti: SOLO report
     smartSettings.hideDiscounts = !!elHideDiscounts?.checked;
 
     saveSmartSettings();
@@ -331,7 +347,6 @@ function bindSmartControls() {
     .filter(Boolean)
     .forEach(el => el.addEventListener('change', onChange));
 
-  // UX: se attivo Smart mode, di default nascondo venduto/diff/sconti nel report
   if (smartSettings.smartMode) {
     smartSettings.hideVenduto = true;
     smartSettings.hideDiff = true;
@@ -341,24 +356,20 @@ function bindSmartControls() {
 }
 
 function applyColumnVisibility() {
-  // ✅ SCONTI SEMPRE VISIBILI IN TABELLA: NON li tocchiamo più qui.
   const hideVenduto = smartSettings.smartMode ? true : smartSettings.hideVenduto;
   const hideDiff = smartSettings.smartMode ? true : smartSettings.hideDiff;
 
   setColHidden('venduto', hideVenduto);
   setColHidden('diff', hideDiff);
 
-  // opzionale: in smart nascondo margine e prezzo lordo (interno)
   setColHidden('margine', smartSettings.smartMode);
   setColHidden('prezzoLordo', smartSettings.smartMode);
 }
 
 function setColHidden(colKey, hidden) {
-  // header
   document.querySelectorAll(`th[data-col="${colKey}"]`).forEach(th => {
     th.classList.toggle('col-hidden', !!hidden);
   });
-  // body cells
   document.querySelectorAll(`td[data-col="${colKey}"]`).forEach(td => {
     td.classList.toggle('col-hidden', !!hidden);
   });
@@ -405,10 +416,8 @@ function handleCSVUpload(event) {
         return;
       }
 
-      // ✅ mapping coerente e riusabile
       listino = normalizeListino(results.data);
 
-      // ✅ salva in locale (se toggleRememberCSV è checked)
       saveLastCsvPayload({
         listinoRows: listino,
         meta: {
@@ -444,7 +453,7 @@ function aggiornaListinoSelect() {
     if (item.codice.toLowerCase().includes(searchTerm) || item.descrizione.toLowerCase().includes(searchTerm)) {
       const option = document.createElement("option");
       option.value = item.codice;
-      option.textContent = `${item.codice} - ${item.descrizione} - €${item.prezzoLordo}`;
+      option.textContent = `${item.codice} - ${item.descrizione} - €${roundTwo(item.prezzoLordo).toFixed(2)}`;
       select.appendChild(option);
     }
   });
@@ -473,28 +482,36 @@ function aggiungiArticoloDaListino() {
   aggiornaTotaliGenerali();
   updateEquivalentDiscountDisplay();
 }
-
 function computeRow(articolo) {
-  const sconto1 = articolo.sconto || 0;
-  const sconto2 = articolo.sconto2 || 0;
+  // percentuali con decimali + clamp di sicurezza
+  const sconto1 = clamp(parseDec(articolo.sconto || 0), 0, 100);
+  const sconto2 = clamp(parseDec(articolo.sconto2 || 0), 0, 100);
 
-  const prezzoScontato = articolo.prezzoLordo * (1 - sconto1 / 100) * (1 - sconto2 / 100);
+  const prezzoLordo = parseDec(articolo.prezzoLordo || 0);
+  const prezzoScontato = prezzoLordo * (1 - sconto1 / 100) * (1 - sconto2 / 100);
   const totaleNettoUnit = roundTwo(prezzoScontato);
 
-  const margine = articolo.margine || 0;
-  const conMargineUnit = roundTwo(totaleNettoUnit / (1 - margine / 100)); // “prezzo unitario interno”
-  const qta = articolo.quantita || 1;
+  // margine: NON può arrivare a 100 (altrimenti divisione per 0)
+  const margine = clamp(parseDec(articolo.margine || 0), 0, 99.99);
+  const conMargineUnit = roundTwo(totaleNettoUnit / (1 - margine / 100));
 
-  const serviziUnit = (articolo.costoTrasporto || 0) + (articolo.costoInstallazione || 0);
+  const qta = Math.max(1, parseInt(articolo.quantita || 1, 10) || 1);
+
+  const serviziUnit = roundTwo(parseDec(articolo.costoTrasporto || 0) + parseDec(articolo.costoInstallazione || 0));
   const granTotRiga = roundTwo((conMargineUnit + serviziUnit) * qta);
 
-  const venduto = articolo.venduto || 0;
+  const venduto = parseDec(articolo.venduto || 0);
   const differenza = roundTwo(venduto - granTotRiga);
 
-  // “Netto/cad” per SMART (cliente):
   const nettoCadSmart = roundTwo(granTotRiga / qta);
 
-  return { sconto1, sconto2, totaleNettoUnit, conMargineUnit, qta, serviziUnit, granTotRiga, venduto, differenza, nettoCadSmart };
+  return {
+    sconto1, sconto2,
+    totaleNettoUnit, conMargineUnit,
+    qta, serviziUnit,
+    granTotRiga, venduto,
+    differenza, nettoCadSmart
+  };
 }
 
 function aggiornaTabellaArticoli() {
@@ -509,23 +526,56 @@ function aggiornaTabellaArticoli() {
       <td data-col="codice">${articolo.codice}</td>
       <td data-col="descrizione">${articolo.descrizione}</td>
 
-      <td data-col="prezzoLordo">${articolo.prezzoLordo}€</td>
+      <td data-col="prezzoLordo">${roundTwo(parseDec(articolo.prezzoLordo)).toFixed(2)}€</td>
 
-      <td data-col="sconto1"><input type="number" value="${r.sconto1}" placeholder="%" data-index="${index}" data-field="sconto" oninput="aggiornaCampo(event)" /></td>
-      <td data-col="sconto2"><input type="number" value="${r.sconto2}" placeholder="%" data-index="${index}" data-field="sconto2" oninput="aggiornaCampo(event)" /></td>
+      <!-- ✅ type="text" + inputmode="decimal" per accettare virgola -->
+      <td data-col="sconto1">
+        <input type="text" inputmode="decimal" value="${fmtDec(r.sconto1, 2, true)}"
+          placeholder="%" data-index="${index}" data-field="sconto"
+          oninput="aggiornaCampo(event)" />
+      </td>
 
-      <td data-col="margine"><input type="number" value="${articolo.margine || 0}" placeholder="%" data-index="${index}" data-field="margine" oninput="aggiornaCampo(event)" /></td>
+      <td data-col="sconto2">
+        <input type="text" inputmode="decimal" value="${fmtDec(r.sconto2, 2, true)}"
+          placeholder="%" data-index="${index}" data-field="sconto2"
+          oninput="aggiornaCampo(event)" />
+      </td>
+
+      <td data-col="margine">
+        <input type="text" inputmode="decimal" value="${fmtDec(parseDec(articolo.margine || 0), 2, true)}"
+          placeholder="%" data-index="${index}" data-field="margine"
+          oninput="aggiornaCampo(event)" />
+      </td>
 
       <td data-col="totaleNetto">${r.totaleNettoUnit.toFixed(2)}€</td>
 
-      <td data-col="trasporto"><input type="number" value="${articolo.costoTrasporto || 0}" placeholder="€" data-index="${index}" data-field="costoTrasporto" oninput="aggiornaCampo(event)" /></td>
-      <td data-col="installazione"><input type="number" value="${articolo.costoInstallazione || 0}" placeholder="€" data-index="${index}" data-field="costoInstallazione" oninput="aggiornaCampo(event)" /></td>
+      <td data-col="trasporto">
+        <input type="text" inputmode="decimal" value="${fmtDec(parseDec(articolo.costoTrasporto || 0), 2, true)}"
+          placeholder="€" data-index="${index}" data-field="costoTrasporto"
+          oninput="aggiornaCampo(event)" />
+      </td>
 
-      <td data-col="qta"><input type="number" value="${r.qta}" min="1" data-index="${index}" data-field="quantita" oninput="aggiornaCampo(event)" /></td>
+      <td data-col="installazione">
+        <input type="text" inputmode="decimal" value="${fmtDec(parseDec(articolo.costoInstallazione || 0), 2, true)}"
+          placeholder="€" data-index="${index}" data-field="costoInstallazione"
+          oninput="aggiornaCampo(event)" />
+      </td>
+
+      <!-- qta resta number -->
+      <td data-col="qta">
+        <input type="number" value="${r.qta}" min="1" step="1"
+          data-index="${index}" data-field="quantita"
+          oninput="aggiornaCampo(event)" />
+      </td>
 
       <td data-col="granTot">${r.granTotRiga.toFixed(2)}€</td>
 
-      <td data-col="venduto"><input type="number" value="${r.venduto}" placeholder="€" data-index="${index}" data-field="venduto" oninput="aggiornaCampo(event)" /></td>
+      <td data-col="venduto">
+        <input type="text" inputmode="decimal" value="${fmtDec(r.venduto, 2, true)}"
+          placeholder="€" data-index="${index}" data-field="venduto"
+          oninput="aggiornaCampo(event)" />
+      </td>
+
       <td data-col="diff">${r.differenza.toFixed(2)}€</td>
 
       <td data-col="azioni"><button onclick="rimuoviArticolo(${index})">Rimuovi</button></td>
@@ -538,12 +588,20 @@ function aggiornaTabellaArticoli() {
 
 function aggiornaCampo(event) {
   const input = event.target;
-  const index = parseInt(input.getAttribute("data-index"));
+  const index = parseInt(input.getAttribute("data-index"), 10);
   const field = input.getAttribute("data-field");
 
-  let val = parseFloat(String(input.value || '0').replace(",", ".")) || 0;
-  if ((field === "sconto" || field === "sconto2" || field === "margine") && val < 0) val = 0;
-  if (field === "quantita" && val < 1) val = 1;
+  let val;
+
+  if (field === "quantita") {
+    val = parseInt(String(input.value || '1'), 10) || 1;
+    if (val < 1) val = 1;
+  } else {
+    val = parseDec(input.value);
+    if (field === "sconto" || field === "sconto2") val = clamp(val, 0, 100);
+    if (field === "margine") val = clamp(val, 0, 99.99);
+    if (field === "costoTrasporto" || field === "costoInstallazione" || field === "venduto") val = Math.max(0, val);
+  }
 
   articoliAggiunti[index][field] = val;
 
@@ -560,24 +618,23 @@ function rimuoviArticolo(index) {
   aggiornaTotaliGenerali();
   updateEquivalentDiscountDisplay();
 }
+
 function aggiornaTotaliGenerali() {
-  let totaleSenzaServizi = 0;   // “conMargine” * qta
-  let totaleConServizi = 0;     // granTot riga
+  let totaleSenzaServizi = 0;
+  let totaleConServizi = 0;
   let totaleVenduto = 0;
   let totaleDifferenzaSconto = 0;
 
   articoliAggiunti.forEach(articolo => {
     const r = computeRow(articolo);
-
     totaleSenzaServizi += r.conMargineUnit * r.qta;
     totaleConServizi += r.granTotRiga;
-
     totaleVenduto += r.venduto;
     totaleDifferenzaSconto += r.differenza;
   });
 
   const imponibile = autoPopolaCosti ? roundTwo(totaleConServizi) : roundTwo(totaleSenzaServizi);
-  const vatRate = clamp(parseFloat(String(smartSettings.vatRate ?? 22).replace(',', '.')) || 0, 0, 100);
+  const vatRate = clamp(parseDec(smartSettings.vatRate ?? 22), 0, 100);
   const iva = roundTwo(imponibile * (vatRate / 100));
   const totaleIvato = roundTwo(imponibile + iva);
 
@@ -617,29 +674,36 @@ function aggiornaTotaliGenerali() {
 }
 
 // --- Funzioni per aggiunta manuale articoli
-
 function mostraFormArticoloManuale() {
   const tableBody = document.querySelector("#articoli-table tbody");
-
   if (document.getElementById("manual-input-row")) return;
 
   const row = document.createElement("tr");
   row.id = "manual-input-row";
 
+  // ✅ text+inputmode decimal per i campi con virgola
   row.innerHTML = `
     <td data-col="codice"><input type="text" id="manualCodice" placeholder="Codice" /></td>
     <td data-col="descrizione"><input type="text" id="manualDescrizione" placeholder="Descrizione" /></td>
-    <td data-col="prezzoLordo"><input type="number" id="manualPrezzo" placeholder="€" step="0.01" /></td>
-    <td data-col="sconto1"><input type="number" id="manualSconto1" placeholder="%" value="0" step="0.01" /></td>
-    <td data-col="sconto2"><input type="number" id="manualSconto2" placeholder="%" value="0" step="0.01" /></td>
-    <td data-col="margine"><input type="number" id="manualMargine" placeholder="%" value="0" step="0.01" /></td>
+
+    <td data-col="prezzoLordo"><input type="text" inputmode="decimal" id="manualPrezzo" placeholder="€" value="0" /></td>
+
+    <td data-col="sconto1"><input type="text" inputmode="decimal" id="manualSconto1" placeholder="%" value="0" /></td>
+    <td data-col="sconto2"><input type="text" inputmode="decimal" id="manualSconto2" placeholder="%" value="0" /></td>
+    <td data-col="margine"><input type="text" inputmode="decimal" id="manualMargine" placeholder="%" value="0" /></td>
+
     <td data-col="totaleNetto"><span id="manualTotale">—</span></td>
-    <td data-col="trasporto"><input type="number" id="manualTrasporto" placeholder="€" value="0" step="0.01" /></td>
-    <td data-col="installazione"><input type="number" id="manualInstallazione" placeholder="€" value="0" step="0.01" /></td>
-    <td data-col="qta"><input type="number" id="manualQuantita" placeholder="1" value="1" min="1" /></td>
+
+    <td data-col="trasporto"><input type="text" inputmode="decimal" id="manualTrasporto" placeholder="€" value="0" /></td>
+    <td data-col="installazione"><input type="text" inputmode="decimal" id="manualInstallazione" placeholder="€" value="0" /></td>
+
+    <td data-col="qta"><input type="number" id="manualQuantita" placeholder="1" value="1" min="1" step="1" /></td>
+
     <td data-col="granTot"><span id="manualGranTotale">—</span></td>
-    <td data-col="venduto"><input type="number" id="manualVenduto" placeholder="€" value="0" step="0.01" /></td>
+
+    <td data-col="venduto"><input type="text" inputmode="decimal" id="manualVenduto" placeholder="€" value="0" /></td>
     <td data-col="diff"><span id="manualDifferenza">—</span></td>
+
     <td data-col="azioni">
       <button onclick="aggiungiArticoloManuale()">✅</button>
       <button onclick="annullaArticoloManuale()">❌</button>
@@ -656,17 +720,19 @@ function mostraFormArticoloManuale() {
   });
 
   applyColumnVisibility();
+  calcolaRigaManuale();
 }
 
 function calcolaRigaManuale() {
-  const prezzoLordo = parseFloat(document.getElementById("manualPrezzo").value) || 0;
-  const sconto1 = parseFloat(document.getElementById("manualSconto1").value) || 0;
-  const sconto2 = parseFloat(document.getElementById("manualSconto2").value) || 0;
-  const margine = parseFloat(document.getElementById("manualMargine").value) || 0;
-  const trasporto = parseFloat(document.getElementById("manualTrasporto").value) || 0;
-  const installazione = parseFloat(document.getElementById("manualInstallazione").value) || 0;
-  const quantita = parseInt(document.getElementById("manualQuantita").value) || 1;
-  const venduto = parseFloat(document.getElementById("manualVenduto").value) || 0;
+  const prezzoLordo = parseDec(document.getElementById("manualPrezzo").value);
+  const sconto1 = clamp(parseDec(document.getElementById("manualSconto1").value), 0, 100);
+  const sconto2 = clamp(parseDec(document.getElementById("manualSconto2").value), 0, 100);
+  const margine = clamp(parseDec(document.getElementById("manualMargine").value), 0, 99.99);
+
+  const trasporto = Math.max(0, parseDec(document.getElementById("manualTrasporto").value));
+  const installazione = Math.max(0, parseDec(document.getElementById("manualInstallazione").value));
+  const quantita = Math.max(1, parseInt(document.getElementById("manualQuantita").value || '1', 10) || 1);
+  const venduto = Math.max(0, parseDec(document.getElementById("manualVenduto").value));
 
   const scontato = roundTwo(prezzoLordo * (1 - sconto1 / 100) * (1 - sconto2 / 100));
   const conMargine = roundTwo(scontato / (1 - margine / 100));
@@ -683,14 +749,16 @@ function aggiungiArticoloManuale() {
 
   const codice = document.getElementById("manualCodice").value.trim();
   const descrizione = document.getElementById("manualDescrizione").value.trim();
-  const prezzoLordo = parseFloat(document.getElementById("manualPrezzo").value) || 0;
-  const sconto = parseFloat(document.getElementById("manualSconto1").value) || 0;
-  const sconto2 = parseFloat(document.getElementById("manualSconto2").value) || 0;
-  const margine = parseFloat(document.getElementById("manualMargine").value) || 0;
-  const costoTrasporto = parseFloat(document.getElementById("manualTrasporto").value) || 0;
-  const costoInstallazione = parseFloat(document.getElementById("manualInstallazione").value) || 0;
-  const quantita = parseInt(document.getElementById("manualQuantita").value) || 1;
-  const venduto = parseFloat(document.getElementById("manualVenduto").value) || 0;
+
+  const prezzoLordo = parseDec(document.getElementById("manualPrezzo").value);
+  const sconto = clamp(parseDec(document.getElementById("manualSconto1").value), 0, 100);
+  const sconto2 = clamp(parseDec(document.getElementById("manualSconto2").value), 0, 100);
+  const margine = clamp(parseDec(document.getElementById("manualMargine").value), 0, 99.99);
+
+  const costoTrasporto = Math.max(0, parseDec(document.getElementById("manualTrasporto").value));
+  const costoInstallazione = Math.max(0, parseDec(document.getElementById("manualInstallazione").value));
+  const quantita = Math.max(1, parseInt(document.getElementById("manualQuantita").value || '1', 10) || 1);
+  const venduto = Math.max(0, parseDec(document.getElementById("manualVenduto").value));
 
   const nuovoArticolo = {
     codice,
@@ -718,7 +786,6 @@ function annullaArticoloManuale() {
 }
 
 // -------------------- REPORTS --------------------
-
 function generaReportSmartCliente() {
   let report = "PREVENTIVO / ORDINE\n\n";
   let imponibile = 0;
@@ -740,8 +807,8 @@ function generaReportSmartCliente() {
     report += `Q.tà: ${qta}  |  Netto/cad: ${nettoCad.toFixed(2)}€\n`;
 
     if (mostraServizi) {
-      const tr = roundTwo(articolo.costoTrasporto || 0);
-      const ins = roundTwo(articolo.costoInstallazione || 0);
+      const tr = roundTwo(parseDec(articolo.costoTrasporto || 0));
+      const ins = roundTwo(parseDec(articolo.costoInstallazione || 0));
       if (tr !== 0 || ins !== 0) {
         report += `Servizi: Trasporto ${tr.toFixed(2)}€  |  Installazione ${ins.toFixed(2)}€\n`;
       }
@@ -752,7 +819,7 @@ function generaReportSmartCliente() {
 
   imponibile = roundTwo(imponibile);
 
-  const vatRate = clamp(parseFloat(String(smartSettings.vatRate ?? 22).replace(',', '.')) || 0, 0, 100);
+  const vatRate = clamp(parseDec(smartSettings.vatRate ?? 22), 0, 100);
   const iva = roundTwo(imponibile * (vatRate / 100));
   const totaleIvato = roundTwo(imponibile + iva);
 
@@ -800,8 +867,8 @@ function generaReportTesto() {
 
     report += `Quantità: ${r.qta}\n`;
     if (mostraDettagliServizi && autoPopolaCosti) {
-      report += `Trasporto: ${(articolo.costoTrasporto || 0).toFixed(2)}€\n`;
-      report += `Installazione: ${(articolo.costoInstallazione || 0).toFixed(2)}€\n`;
+      report += `Trasporto: ${roundTwo(parseDec(articolo.costoTrasporto || 0)).toFixed(2)}€\n`;
+      report += `Installazione: ${roundTwo(parseDec(articolo.costoInstallazione || 0)).toFixed(2)}€\n`;
     }
     report += `Totale: ${r.granTotRiga.toFixed(2)}€\n`;
 
@@ -828,7 +895,7 @@ function generaReportTesto() {
 
   if (smartSettings.showVAT) {
     const imponibile = autoPopolaCosti ? roundTwo(totaleConServizi) : roundTwo(totaleSenzaServizi);
-    const vatRate = clamp(parseFloat(String(smartSettings.vatRate ?? 22).replace(',', '.')) || 0, 0, 100);
+    const vatRate = clamp(parseDec(smartSettings.vatRate ?? 22), 0, 100);
     const iva = roundTwo(imponibile * (vatRate / 100));
     const totaleIvato = roundTwo(imponibile + iva);
 
@@ -843,7 +910,6 @@ function generaReportTesto() {
 
 function inviaReportWhatsApp() {
   window.track?.report_whatsapp?.({ variant: smartSettings.smartMode ? 'smart' : 'standard' });
-
   const report = generaReportTesto();
   const whatsappUrl = "https://api.whatsapp.com/send?text=" + encodeURIComponent(report);
   window.open(whatsappUrl, '_blank');
@@ -873,13 +939,17 @@ function generaReportTestoSenzaMargine() {
   const mostraServizi = checkboxServizi && checkboxServizi.checked;
 
   articoliAggiunti.forEach((articolo, index) => {
-    const sconto1 = articolo.sconto || 0;
-    const sconto2 = articolo.sconto2 || 0;
-    const prezzoLordo = articolo.prezzoLordo || 0;
-    const prezzoScontato = roundTwo(prezzoLordo * (1 - sconto1 / 100) * (1 - sconto2 / 100));
-    const quantita = articolo.quantita || 1;
+    const sconto1 = clamp(parseDec(articolo.sconto || 0), 0, 100);
+    const sconto2 = clamp(parseDec(articolo.sconto2 || 0), 0, 100);
 
-    const granTotale = (prezzoScontato + (articolo.costoTrasporto || 0) + (articolo.costoInstallazione || 0)) * quantita;
+    const prezzoLordo = parseDec(articolo.prezzoLordo || 0);
+    const prezzoScontato = roundTwo(prezzoLordo * (1 - sconto1 / 100) * (1 - sconto2 / 100));
+    const quantita = Math.max(1, parseInt(articolo.quantita || 1, 10) || 1);
+
+    const granTotale =
+      (prezzoScontato + Math.max(0, parseDec(articolo.costoTrasporto || 0)) + Math.max(0, parseDec(articolo.costoInstallazione || 0)))
+      * quantita;
+
     const granTotaleFinal = roundTwo(granTotale);
 
     totaleSenzaServizi += prezzoScontato * quantita;
@@ -896,8 +966,8 @@ function generaReportTestoSenzaMargine() {
 
     report += `Quantità: ${quantita}\n`;
     if (mostraServizi && autoPopolaCosti) {
-      report += `Trasporto: ${(articolo.costoTrasporto || 0).toFixed(2)}€\n`;
-      report += `Installazione: ${(articolo.costoInstallazione || 0).toFixed(2)}€\n`;
+      report += `Trasporto: ${roundTwo(parseDec(articolo.costoTrasporto || 0)).toFixed(2)}€\n`;
+      report += `Installazione: ${roundTwo(parseDec(articolo.costoInstallazione || 0)).toFixed(2)}€\n`;
     }
     report += `Totale: ${granTotaleFinal.toFixed(2)}€\n\n`;
   });
@@ -909,7 +979,7 @@ function generaReportTestoSenzaMargine() {
 
   if (smartSettings.showVAT) {
     const imponibile = autoPopolaCosti ? roundTwo(totaleConServizi) : roundTwo(totaleSenzaServizi);
-    const vatRate = clamp(parseFloat(String(smartSettings.vatRate ?? 22).replace(',', '.')) || 0, 0, 100);
+    const vatRate = clamp(parseDec(smartSettings.vatRate ?? 22), 0, 100);
     const iva = roundTwo(imponibile * (vatRate / 100));
     const totaleIvato = roundTwo(imponibile + iva);
 
@@ -924,7 +994,6 @@ function generaReportTestoSenzaMargine() {
 
 function inviaReportWhatsAppSenzaMargine() {
   window.track?.report_whatsapp?.({ variant: smartSettings.smartMode ? 'smart' : 'no_margin' });
-
   const report = generaReportTestoSenzaMargine();
   const whatsappUrl = "https://api.whatsapp.com/send?text=" + encodeURIComponent(report);
   window.open(whatsappUrl, '_blank');
