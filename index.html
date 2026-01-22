@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it" data-app="CSVXpressSmart" data-ver="1.0.0">
+<html lang="it" data-app="CSVXpressSmart" data-ver="1.0.1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,6 +12,21 @@
 
   <!-- Styles -->
   <link rel="stylesheet" href="style.css">
+
+  <!-- ✅ FIX (tabella centrata + colonne stabili + input decimali usabili) -->
+  <style>
+    main{max-width:1200px;margin:0 auto;padding:16px}
+    #articoli-section{overflow-x:auto}
+    #articoli-table{width:100%;table-layout:fixed;border-collapse:collapse}
+    #articoli-table th,#articoli-table td{padding:8px;vertical-align:middle}
+    #articoli-table input{width:100%;box-sizing:border-box}
+
+    /* Nasconde colonne via class col-hidden (app.js) */
+    .col-hidden{display:none !important}
+
+    /* Report: preserva a capo e spazi */
+    .report-preview{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+  </style>
 
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-QZ7CQDJX3E"></script>
@@ -46,7 +61,7 @@
       <input type="file" id="csvFileInput" accept=".csv">
       <p id="csvError" style="color: red; display: none;">Errore nel caricamento del file CSV.</p>
 
-      <!-- ✅ NUOVO: Memoria CSV (usa IndexedDB via app.js) -->
+      <!-- ✅ Memoria CSV (IndexedDB via app.js) -->
       <div id="csv-memory" class="csv-memory" style="margin-top:12px;">
         <h3 style="margin:0 0 6px 0;">Memoria CSV</h3>
 
@@ -94,7 +109,8 @@
 
         <div class="vat-row">
           <label for="vatRate">Aliquota IVA %</label>
-          <input type="number" id="vatRate" value="22" min="0" step="0.1" inputmode="decimal">
+          <!-- ✅ meglio text+inputmode decimal per virgola (compatibilità) -->
+          <input type="text" id="vatRate" value="22" inputmode="decimal" autocomplete="off" spellcheck="false">
         </div>
 
         <label class="chk">
@@ -112,7 +128,7 @@
           Ometti Sconti (Sconto 1 / Sconto 2) nel report
         </label>
 
-        <!-- ✅ NUOVO: mostra lo sconto al cliente nel report SMART -->
+        <!-- ✅ mostra lo sconto al cliente nel report SMART (gestito da app.js) -->
         <label class="chk">
           <input type="checkbox" id="toggleShowClientDiscount">
           Mostra “Sconto cliente” nel report Smart
@@ -150,17 +166,22 @@
 
     <section id="report-section" data-zone="report_export">
       <h2>Report Articoli</h2>
+
       <button id="btnWA" onclick="inviaReportWhatsApp()">Invia Report su WhatsApp</button>
       <button id="btnTXT" onclick="generaPDFReport()">Genera TXT Report</button>
+
       <br><br>
+
       <button id="btnWASenzaMargine" onclick="inviaReportWhatsAppSenzaMargine()">Invia Report su WhatsApp Senza Margine</button>
       <button id="btnTXTSenzaMargine" onclick="generaTXTReportSenzaMargine()">Genera TXT Report Senza Margine</button>
+
+      <!-- ✅ opzionale: preview leggibile in pagina (non rompe nulla se non lo usi) -->
+      <div id="reportPreview" class="report-preview" style="margin-top:14px; display:none;"></div>
     </section>
   </main>
 
   <!-- Librerie necessarie -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Tracking bridge (GA4 + Clarity) -->
   <script>
