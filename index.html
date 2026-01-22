@@ -59,41 +59,46 @@
     <section id="articoli-section" data-zone="tabella_articoli">
       <h2>Articoli Aggiunti</h2>
 
-      <!-- CONTROLLI SMART (nuovi) -->
-      <div id="smart-controls" class="smart-controls">
-        <h3>Modalità Preventivo / Ordine (Smart)</h3>
+     <!-- CONTROLLI SMART (nuovi) -->
+<div id="smart-controls" class="smart-controls">
+  <h3>Modalità Preventivo / Ordine (Smart)</h3>
 
-        <label class="chk">
-          <input type="checkbox" id="toggleSmartMode">
-          Modalità Cliente (Smart)
-        </label>
+  <label class="chk">
+    <input type="checkbox" id="toggleSmartMode">
+    Modalità Cliente (Smart)
+  </label>
 
-        <label class="chk">
-          <input type="checkbox" id="toggleShowVAT">
-          Mostra IVA
-        </label>
+  <label class="chk">
+    <input type="checkbox" id="toggleShowVAT">
+    Mostra IVA
+  </label>
 
-        <div class="vat-row">
-          <label for="vatRate">Aliquota IVA %</label>
-          <input type="number" id="vatRate" value="22" min="0" step="0.1">
-        </div>
+  <div class="vat-row">
+    <label for="vatRate">Aliquota IVA %</label>
+    <input type="number" id="vatRate" value="22" min="0" step="0.1">
+  </div>
 
-        <label class="chk">
-          <input type="checkbox" id="toggleHideVenduto">
-          Ometti “Venduto A €”
-        </label>
+  <label class="chk">
+    <input type="checkbox" id="toggleHideVenduto">
+    Ometti “Venduto A €”
+  </label>
 
-        <label class="chk">
-          <input type="checkbox" id="toggleHideDiff">
-          Ometti “Differenza sconto”
-        </label>
+  <label class="chk">
+    <input type="checkbox" id="toggleHideDiff">
+    Ometti “Differenza sconto”
+  </label>
 
-        <label class="chk">
-          <input type="checkbox" id="toggleHideDiscounts">
-          Ometti Sconti (Sconto 1 / Sconto 2) nel report
-        </label>
-      </div>
+  <label class="chk">
+    <input type="checkbox" id="toggleHideDiscounts">
+    Ometti Sconti (Sconto 1 / Sconto 2) nel report
+  </label>
 
+  <!-- INFO SEMPRE VISIBILE – SOLO UI, NON REPORT -->
+  <div class="smart-info">
+    <strong>Sconto equivalente cliente:</strong>
+    <span id="smartEquivalentDiscount">—</span>
+  </div>
+</div>
       <table id="articoli-table" border="1">
         <thead>
           <tr>
