@@ -1,0 +1,128 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f4f4f4;
+  color: #333;
+}
+
+header {
+  background-color: #2196f3;
+  color: white;
+  padding: 1em;
+  text-align: center;
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.logo {
+  height: 40px;
+  width: 40px;
+}
+
+main {
+  padding: 1em;
+  max-width: 900px;
+  margin: auto;
+  background-color: white;
+  box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
+}
+
+section {
+  margin-bottom: 2em;
+}
+
+input[type="file"],
+input[type="text"],
+input[type="number"],
+select,
+button {
+  display: block;
+  margin-top: 0.5em;
+  margin-bottom: 1em;
+  padding: 0.5em;
+  width: 100%;
+  max-width: 400px;
+}
+
+input[type="checkbox"] {
+  margin-right: 0.5em;
+}
+
+#articoli-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#articoli-table th,
+#articoli-table td {
+  padding: 0.5em;
+  text-align: center;
+}
+
+#articoli-table input[type="number"] {
+  width: 80px;
+  text-align: right;
+}
+
+button {
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: #1976d2;
+}
+
+#totaleGenerale {
+  background-color: #f0f8ff;
+  border: 1px solid #2196f3;
+  padding: 1em;
+  margin-bottom: 1em;
+  font-size: 1.1em;
+  line-height: 1.6;
+}
+
+/* --- SMART UI --- */
+.smart-controls{
+  border: 1px solid rgba(33,150,243,.35);
+  background: #f7fbff;
+  padding: 12px;
+  border-radius: 10px;
+  margin: 12px 0 18px;
+}
+.smart-controls h3{
+  margin: 0 0 10px;
+  font-size: 1.02em;
+}
+.smart-controls .chk{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  max-width: 520px;
+}
+.smart-controls .vat-row{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 10px;
+}
+.smart-controls .vat-row input{
+  max-width: 110px;
+  margin: 0;
+}
+
+/* hide columns */
+.col-hidden{
+  display: none !important;
+}
