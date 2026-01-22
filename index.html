@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="it" data-app="CSVXpressSmart" data-ver="1.0.0">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>CSVXpressSmart</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#ffffff">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-QZ7CQDJX3E"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-QZ7CQDJX3E', { anonymize_ip: true });
+  </script>
+
+  <!-- Microsoft Clarity -->
+  <script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+      c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+      t=l.createElement(r); t.async=1; t.src="https://www.clarity.ms/tag/"+i;
+      y=l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "uy8owdlf8z");
+  </script>
+</head>
+
+<body>
+  <header data-zone="header">
+    <div class="logo-container">
+      <!-- aggiorna questo path con la tua nuova icona -->
+      <img src="icon/CSVXpressSmart-1024.png" alt="CSVXpressSmart Logo" class="logo">
+      <h1>CSVXpressSmart</h1>
+    </div>
+  </header>
+
+  <main>
+    <section id="upload-section" data-zone="upload_csv">
+      <h2>Carica Listino CSV</h2>
+      <input type="file" id="csvFileInput" accept=".csv">
+      <p id="csvError" style="color: red; display: none;">Errore nel caricamento del file CSV.</p>
+    </section>
+
+    <section id="listino-section" data-zone="selezione_listino">
+      <h2>Filtra e Seleziona Articolo dal Listino</h2>
+      <label for="searchListino">Cerca: </label>
+      <input type="text" id="searchListino" placeholder="Inserisci codice o descrizione">
+      <select id="listinoSelect"></select>
+      <button id="btnAddFromListino" onclick="aggiungiArticoloDaListino()">Aggiungi Articolo Selezionato</button>
+    </section>
+
+    <section id="articoli-section" data-zone="tabella_articoli">
+      <h2>Articoli Aggiunti</h2>
+
+      <!-- CONTROLLI SMART (nuovi) -->
+      <div id="smart-controls" class="smart-controls">
+        <h3>Modalità Preventivo / Ordine (Smart)</h3>
+
+        <label class="chk">
+          <input type="checkbox" id="toggleSmartMode">
+          Modalità Cliente (Smart)
+        </label>
+
+        <label class="chk">
+          <input type="checkbox" id="toggleShowVAT">
+          Mostra IVA
+        </label>
+
+        <div class="vat-row">
+          <label for="vatRate">Aliquota IVA %</label>
+          <input type="number" id="vatRate" value="22" min="0" step="0.1">
+        </div>
+
+        <label class="chk">
+          <input type="checkbox" id="toggleHideVenduto">
+          Ometti “Venduto A €”
+        </label>
+
+        <label class="chk">
+          <input type="checkbox" id="toggleHideDiff">
+          Ometti “Differenza sconto”
+        </label>
+
+        <label class="chk">
+          <input type="checkbox" id="toggleHideDiscounts">
+          Ometti Sconti (Sconto 1 / Sconto 2) nel report e tabella
+        </label>
+      </div>
+
+      <table id="articoli-table" border="1">
+        <thead>
+          <tr>
+            <th data-col="codice">Codice</th>
+            <th data-col="descrizione">Descrizione</th>
+            <th data-col="prezzoLordo">Prezzo Lordo</th>
+            <th data-col="sconto1">Sconto 1%</th>
+            <th data-col="sconto2">Sconto 2%</th>
+            <th data-col="margine">Margine %</th>
+            <th data-col="totaleNetto">Totale</th>
+            <th data-col="trasporto">Trasporto</th>
+            <th data-col="installazione">Installazione</th>
+            <th data-col="qta">Q.tà</th>
+            <th data-col="granTot">Gran Tot</th>
+            <th data-col="venduto">Venduto A €</th>
+            <th data-col="diff">Differenza sconto</th>
+            <th data-col="azioni">Azioni</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section id="report-section" data-zone="report_export">
+      <h2>Report Articoli</h2>
+      <button id="btnWA" onclick="inviaReportWhatsApp()">Invia Report su WhatsApp</button>
+      <button id="btnTXT" onclick="generaPDFReport()">Genera TXT Report</button>
+      <br><br>
+      <button id="btnWASenzaMargine" onclick="inviaReportWhatsAppSenzaMargine()">Invia Report su WhatsApp Senza Margine</button>
+      <button id="btnTXTSenzaMargine" onclick="generaTXTReportSenzaMargine()">Genera TXT Report Senza Margine</button>
+    </section>
+  </main>
+
+  <!-- Librerie necessarie -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- Tracking bridge (GA4 + Clarity) -->
+  <script>
+    (function () {
+      const APP = document.documentElement.getAttribute('data-app') || 'CSVXpressSmart';
+      const VER = document.documentElement.getAttribute('data-ver') || 'dev';
+
+      function safeGtag(eventName, params) {
+        try { if (typeof window.gtag === 'function') window.gtag('event', eventName, params); } catch (_) {}
+      }
+      function safeClarity(eventName, params) {
+        try {
+          if (typeof window.clarity === 'function') {
+            window.clarity('event', eventName);
+            if (params && typeof params === 'object') {
+              for (const [k, v] of Object.entries(params)) {
+                window.clarity('set', `${eventName}_${k}`, String(v));
+              }
+            }
+          }
+        } catch (_) {}
+      }
+      function fpFromFile(file) {
+        if (!file) return undefined;
+        return `${file.name}|${file.size}|${file.lastModified}`;
+      }
+      function send(eventName, params = {}) {
+        const payload = { app: APP, ver: VER, page: location.pathname, ...params };
+        safeGtag(eventName, payload);
+        safeClarity(eventName, payload);
+      }
+
+      window.track = {
+        zone_view: (zone) => send('zone_view', { zone }),
+        csv_upload_start: ({ method } = {}) => send('csv_upload_start', { method }),
+        csv_upload_ok: ({ method, file } = {}) =>
+          send('csv_upload_ok', { method, file_name: file?.name, file_size: file?.size, fp: fpFromFile(file) }),
+        csv_parse_ok: ({ rows, cols, ms } = {}) => send('csv_parse_ok', { rows, cols, parse_ms: ms }),
+        csv_parse_error: ({ code, ms } = {}) => send('csv_parse_error', { error_code: code || 'parse_error', parse_ms: ms }),
+        csv_export: ({ format } = {}) => send('csv_export', { format: format || 'txt' }),
+        report_whatsapp: ({ variant } = {}) => send('report_whatsapp', { variant: variant || 'standard' }),
+        add_item_listino: () => send('add_item_listino', {}),
+        add_item_manual: () => send('add_item_manual', {}),
+        remove_item: () => send('remove_item', {}),
+        smart_toggle: ({ key, val } = {}) => send('smart_toggle', { key, val })
+      };
+
+      window.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('[data-zone]').forEach(el => {
+          const z = el.getAttribute('data-zone');
+          if (z) window.track.zone_view(z);
+        });
+      });
+    })();
+  </script>
+
+  <!-- App -->
+  <script src="app.js"></script>
+</body>
+</html>
