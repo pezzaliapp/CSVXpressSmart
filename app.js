@@ -1,6 +1,7 @@
 /* ===========================
    CSVXpressSmart — app.js
    Fix: decimali con virgola + report smart formattato + tabella stabile
+   + Feature: "Sconto Cliente" (flag) che sostituisce sconto1/sconto2/margine mantenendo invariato il prezzo finale
    =========================== */
 
 // Registra il Service Worker (PWA)
@@ -200,6 +201,7 @@ function normalizeListino(rows) {
     sconto: 0,
     sconto2: 0,
     margine: 0,
+    scontoCliente: 0, // NEW
     costoTrasporto: parseDec(row["CostoTrasporto"] || "0"),
     costoInstallazione: parseDec(row["CostoInstallazione"] || "0"),
     quantita: 1,
@@ -216,8 +218,7 @@ let smartSettings = {
   hideVenduto: true,
   hideDiff: true,
   hideDiscounts: true,
-  // (index.html ha il checkbox, qui lo gestiamo senza rompere nulla anche se non lo usi)
-  showClientDiscount: false
+  showClientDiscount: false // flag "Sconto Cliente"
 };
 
 function loadSmartSettings() {
@@ -231,6 +232,54 @@ function loadSmartSettings() {
 
 function saveSmartSettings() {
   try { localStorage.setItem(SMART_KEY, JSON.stringify(smartSettings)); } catch (_) {}
+}
+
+// -------------------- SCONTO CLIENTE (MODE SWITCH) --------------------
+function computeClientDiscountFromCurrent(articolo) {
+  const prezzoLordo = parseDec(articolo.prezzoLordo || 0);
+  if (prezzoLordo <= 0) return 0;
+
+  // prezzo "venduto al cliente" (senza servizi) = conMargineUnit
+  // uso __ignoreClientDiscount per leggere il valore reale anche se il flag è attivo
+  const r = computeRow({ ...articolo, __ignoreClientDiscount: true });
+  const target = parseDec(r.conMargineUnit || 0);
+
+  const eq = (1 - (target / prezzoLordo)) * 100;
+  return clamp(eq, 0, 100);
+}
+
+function applyClientDiscountMode(enabled) {
+  articoliAggiunti = articoliAggiunti.map(a => {
+    const item = { ...a };
+
+    if (enabled) {
+      // backup dei valori originali (una sola volta)
+      if (item._bakSconto === undefined) item._bakSconto = parseDec(item.sconto || 0);
+      if (item._bakSconto2 === undefined) item._bakSconto2 = parseDec(item.sconto2 || 0);
+      if (item._bakMargine === undefined) item._bakMargine = parseDec(item.margine || 0);
+
+      // calcola sconto cliente equivalente per mantenere invariato il prezzo finale
+      item.scontoCliente = computeClientDiscountFromCurrent(item);
+
+      // azzera i campi "interni" (restano in backup)
+      item.sconto = 0;
+      item.sconto2 = 0;
+      item.margine = 0;
+
+    } else {
+      // ripristina i valori originali
+      if (item._bakSconto !== undefined) item.sconto = item._bakSconto;
+      if (item._bakSconto2 !== undefined) item.sconto2 = item._bakSconto2;
+      if (item._bakMargine !== undefined) item.margine = item._bakMargine;
+      // lascio item.scontoCliente come memoria
+    }
+
+    return item;
+  });
+
+  renderTabellaArticoli();
+  aggiornaTotaliGenerali();
+  updateEquivalentDiscountDisplay();
 }
 
 // -------------------- SCONTO EQUIVALENTE CLIENTE (UI) --------------------
@@ -302,6 +351,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   bindSmartControls();
 
+  // Se l'utente aveva già attivo il flag, applicalo alla tabella caricata
+  if (smartSettings.showClientDiscount) applyClientDiscountMode(true);
+
   // Prima render
   renderTabellaArticoli();          // crea righe e input una sola volta
   aggiornaTotaliGenerali();
@@ -328,6 +380,8 @@ function bindSmartControls() {
   if (elShowClientDiscount) elShowClientDiscount.checked = !!smartSettings.showClientDiscount;
 
   const onChange = () => {
+    const prevClient = !!smartSettings.showClientDiscount;
+
     smartSettings.smartMode = !!elSmart?.checked;
     smartSettings.showVAT = !!elVat?.checked;
 
@@ -349,6 +403,12 @@ function bindSmartControls() {
     saveSmartSettings();
     window.track?.smart_toggle?.({ key: 'settings', val: JSON.stringify(smartSettings) });
 
+    // Se cambia la modalità sconto cliente -> switch completo (mantiene invariato prezzo finale)
+    if (prevClient !== !!smartSettings.showClientDiscount) {
+      applyClientDiscountMode(!!smartSettings.showClientDiscount);
+      return; // applyClientDiscountMode già fa render + totali
+    }
+
     applyColumnVisibility();
     aggiornaCalcoliRighe();   // aggiorna SOLO celle numeriche, senza ricreare input
     aggiornaTotaliGenerali();
@@ -367,8 +427,15 @@ function applyColumnVisibility() {
   setColHidden('venduto', hideVenduto);
   setColHidden('diff', hideDiff);
 
-  // smart: nascondo margine e prezzo lordo (interno)
-  setColHidden('margine', smartSettings.smartMode);
+  const clientMode = !!smartSettings.showClientDiscount;
+
+  // modalità sconto cliente: sostituisce input in tabella
+  setColHidden('sconto1', clientMode);
+  setColHidden('sconto2', clientMode);
+  setColHidden('margine', smartSettings.smartMode || clientMode);
+  setColHidden('scontoCliente', !clientMode);
+
+  // smart: nascondo prezzo lordo (interno)
   setColHidden('prezzoLordo', smartSettings.smartMode);
 }
 
@@ -476,6 +543,11 @@ function aggiungiArticoloDaListino() {
     nuovoArticolo.costoInstallazione = 0;
   }
 
+  // se modalità sconto cliente è attiva, inizializza con sconto cliente equivalente
+  if (smartSettings.showClientDiscount) {
+    nuovoArticolo.scontoCliente = computeClientDiscountFromCurrent(nuovoArticolo);
+  }
+
   articoliAggiunti.push(nuovoArticolo);
   renderTabellaArticoli();
   aggiornaTotaliGenerali();
@@ -484,17 +556,34 @@ function aggiungiArticoloDaListino() {
 
 // -------------------- CALCOLI RIGA --------------------
 function computeRow(articolo) {
-  const sconto1 = clamp(parseDec(articolo.sconto || 0), 0, 100);
-  const sconto2 = clamp(parseDec(articolo.sconto2 || 0), 0, 100);
-
   const prezzoLordo = parseDec(articolo.prezzoLordo || 0);
-  const prezzoScontato = prezzoLordo * (1 - sconto1 / 100) * (1 - sconto2 / 100);
-  const totaleNettoUnit = roundTwo(prezzoScontato);
-
-  const margine = clamp(parseDec(articolo.margine || 0), 0, 99.99);
-  const conMargineUnit = roundTwo(totaleNettoUnit / (1 - margine / 100));
-
   const qta = Math.max(1, parseInt(articolo.quantita || 1, 10) || 1);
+
+  // modalità "Sconto Cliente" attiva (salvo override interno)
+  const useClientDiscount = !!smartSettings.showClientDiscount && !articolo.__ignoreClientDiscount;
+
+  let sconto1 = 0;
+  let sconto2 = 0;
+  let margine = 0;
+
+  let totaleNettoUnit = 0;   // valore mostrato come "Prezzo netto" (tabella/report)
+  let conMargineUnit = 0;    // prezzo venduto al cliente (senza servizi)
+
+  if (useClientDiscount) {
+    const scontoCliente = clamp(parseDec(articolo.scontoCliente || 0), 0, 100);
+    conMargineUnit = roundTwo(prezzoLordo * (1 - scontoCliente / 100));
+    totaleNettoUnit = conMargineUnit;
+
+  } else {
+    sconto1 = clamp(parseDec(articolo.sconto || 0), 0, 100);
+    sconto2 = clamp(parseDec(articolo.sconto2 || 0), 0, 100);
+
+    const prezzoScontato = prezzoLordo * (1 - sconto1 / 100) * (1 - sconto2 / 100);
+    totaleNettoUnit = roundTwo(prezzoScontato);
+
+    margine = clamp(parseDec(articolo.margine || 0), 0, 99.99);
+    conMargineUnit = roundTwo(totaleNettoUnit / (1 - margine / 100));
+  }
 
   const serviziUnit = roundTwo(parseDec(articolo.costoTrasporto || 0) + parseDec(articolo.costoInstallazione || 0));
   const granTotRiga = roundTwo((conMargineUnit + serviziUnit) * qta);
@@ -535,6 +624,12 @@ function renderTabellaArticoli() {
         <input class="cell-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
           value="${fmtDec(r.sconto2, 2, true)}"
           data-index="${index}" data-field="sconto2" />
+      </td>
+
+      <td data-col="scontoCliente">
+        <input class="cell-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+          value="${fmtDec(parseDec(articolo.scontoCliente || 0), 2, true)}"
+          data-index="${index}" data-field="scontoCliente" />
       </td>
 
       <td data-col="margine">
@@ -617,10 +712,17 @@ function onTableInput(e) {
     articoliAggiunti[idx][field] = v;
   } else {
     let v = parseDec(target.value);
-    if (field === "sconto" || field === "sconto2") v = clamp(v, 0, 100);
+    if (field === "sconto" || field === "sconto2" || field === "scontoCliente") v = clamp(v, 0, 100);
     if (field === "margine") v = clamp(v, 0, 99.99);
     if (field === "costoTrasporto" || field === "costoInstallazione" || field === "venduto") v = Math.max(0, v);
+
     articoliAggiunti[idx][field] = v;
+
+    // se l'utente cambia sconto1/sconto2/margine mentre client mode è OFF,
+    // aggiorno "sconto cliente" mostrato sopra come equivalente (non tocco la tabella)
+    if (!smartSettings.showClientDiscount && (field === 'sconto' || field === 'sconto2' || field === 'margine')) {
+      articoliAggiunti[idx].scontoCliente = computeClientDiscountFromCurrent(articoliAggiunti[idx]);
+    }
   }
 
   // Aggiorna SOLO celle calcolate della riga (mantieni focus e caret)
@@ -734,6 +836,9 @@ function mostraFormArticoloManuale() {
 
     <td data-col="sconto1"><input type="text" inputmode="decimal" id="manualSconto1" placeholder="%" value="0" /></td>
     <td data-col="sconto2"><input type="text" inputmode="decimal" id="manualSconto2" placeholder="%" value="0" /></td>
+
+    <td data-col="scontoCliente"><input type="text" inputmode="decimal" id="manualScontoCliente" placeholder="%" value="0" /></td>
+
     <td data-col="margine"><input type="text" inputmode="decimal" id="manualMargine" placeholder="%" value="0" /></td>
 
     <td data-col="totaleNetto"><span id="manualTotale">—</span></td>
@@ -757,13 +862,12 @@ function mostraFormArticoloManuale() {
   tableBody.appendChild(row);
 
   [
-    "manualPrezzo", "manualSconto1", "manualSconto2", "manualMargine",
+    "manualPrezzo", "manualSconto1", "manualSconto2", "manualScontoCliente", "manualMargine",
     "manualTrasporto", "manualInstallazione", "manualQuantita", "manualVenduto"
   ].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener("input", () => {
-      // mantieni digitazione “umana”
       if (el.type === 'text') el.value = sanitizeDecimalTyping(el.value);
       calcolaRigaManuale();
     });
@@ -775,8 +879,11 @@ function mostraFormArticoloManuale() {
 
 function calcolaRigaManuale() {
   const prezzoLordo = parseDec(document.getElementById("manualPrezzo").value);
+
   const sconto1 = clamp(parseDec(document.getElementById("manualSconto1").value), 0, 100);
   const sconto2 = clamp(parseDec(document.getElementById("manualSconto2").value), 0, 100);
+  const scontoCliente = clamp(parseDec(document.getElementById("manualScontoCliente").value), 0, 100);
+
   const margine = clamp(parseDec(document.getElementById("manualMargine").value), 0, 99.99);
 
   const trasporto = Math.max(0, parseDec(document.getElementById("manualTrasporto").value));
@@ -784,12 +891,22 @@ function calcolaRigaManuale() {
   const quantita = Math.max(1, parseInt(document.getElementById("manualQuantita").value || '1', 10) || 1);
   const venduto = Math.max(0, parseDec(document.getElementById("manualVenduto").value));
 
-  const scontato = roundTwo(prezzoLordo * (1 - sconto1 / 100) * (1 - sconto2 / 100));
-  const conMargine = roundTwo(scontato / (1 - margine / 100));
+  let conMargine = 0;
+  let nettoMostrato = 0;
+
+  if (smartSettings.showClientDiscount) {
+    conMargine = roundTwo(prezzoLordo * (1 - scontoCliente / 100));
+    nettoMostrato = conMargine;
+  } else {
+    const scontato = roundTwo(prezzoLordo * (1 - sconto1 / 100) * (1 - sconto2 / 100));
+    conMargine = roundTwo(scontato / (1 - margine / 100));
+    nettoMostrato = scontato;
+  }
+
   const granTot = roundTwo((conMargine + trasporto + installazione) * quantita);
   const differenza = roundTwo(venduto - granTot);
 
-  document.getElementById("manualTotale").textContent = scontato.toFixed(2) + "€";
+  document.getElementById("manualTotale").textContent = nettoMostrato.toFixed(2) + "€";
   document.getElementById("manualGranTotale").textContent = granTot.toFixed(2) + "€";
   document.getElementById("manualDifferenza").textContent = differenza.toFixed(2) + "€";
 }
@@ -803,6 +920,7 @@ function aggiungiArticoloManuale() {
   const prezzoLordo = parseDec(document.getElementById("manualPrezzo").value);
   const sconto = clamp(parseDec(document.getElementById("manualSconto1").value), 0, 100);
   const sconto2 = clamp(parseDec(document.getElementById("manualSconto2").value), 0, 100);
+  const scontoCliente = clamp(parseDec(document.getElementById("manualScontoCliente").value), 0, 100);
   const margine = clamp(parseDec(document.getElementById("manualMargine").value), 0, 99.99);
 
   const costoTrasporto = Math.max(0, parseDec(document.getElementById("manualTrasporto").value));
@@ -817,11 +935,20 @@ function aggiungiArticoloManuale() {
     sconto,
     sconto2,
     margine,
+    scontoCliente,
     costoTrasporto,
     costoInstallazione,
     quantita,
     venduto
   };
+
+  // se la modalità è attiva, allinea scontoCliente equivalente
+  if (smartSettings.showClientDiscount) {
+    nuovoArticolo.scontoCliente = computeClientDiscountFromCurrent(nuovoArticolo);
+    nuovoArticolo.sconto = 0;
+    nuovoArticolo.sconto2 = 0;
+    nuovoArticolo.margine = 0;
+  }
 
   articoliAggiunti.push(nuovoArticolo);
 
@@ -902,6 +1029,8 @@ function generaReportTesto() {
   const checkboxServizi = document.getElementById("toggleMostraServizi");
   mostraDettagliServizi = checkboxServizi && checkboxServizi.checked;
 
+  const clientMode = !!smartSettings.showClientDiscount;
+
   articoliAggiunti.forEach((articolo, index) => {
     const r = computeRow(articolo);
 
@@ -915,8 +1044,12 @@ function generaReportTesto() {
     report += `Prezzo netto: ${r.totaleNettoUnit.toFixed(2)}€\n`;
 
     if (!smartSettings.hideDiscounts) {
-      report += `Sconto 1: ${r.sconto1}%\n`;
-      report += `Sconto 2: ${r.sconto2}%\n`;
+      if (clientMode) {
+        report += `Sconto cliente: ${clamp(parseDec(articolo.scontoCliente || 0), 0, 100).toFixed(2)}%\n`;
+      } else {
+        report += `Sconto 1: ${r.sconto1}%\n`;
+        report += `Sconto 2: ${r.sconto2}%\n`;
+      }
     }
 
     report += `Quantità: ${r.qta}\n`;
@@ -956,14 +1089,14 @@ function generaReportTesto() {
 }
 
 function inviaReportWhatsApp() {
-  window.track?.report_whatsapp?.({ variant: smartSettings.smartMode ? 'smart' : 'standard' });
+  window.track?.report_whatsapp?.({ variant: smartSettings.smartMode ? 'smart' : (smartSettings.showClientDiscount ? 'client_discount' : 'standard') });
   const report = generaReportTesto();
   const whatsappUrl = "https://api.whatsapp.com/send?text=" + encodeURIComponent(report);
   window.open(whatsappUrl, '_blank');
 }
 
 function generaPDFReport() {
-  window.track?.csv_export?.({ format: smartSettings.smartMode ? 'txt_smart' : 'txt_standard' });
+  window.track?.csv_export?.({ format: smartSettings.smartMode ? 'txt_smart' : (smartSettings.showClientDiscount ? 'txt_client_discount' : 'txt_standard') });
   const report = generaReportTesto();
   const blob = new Blob([report], { type: "text/plain" });
   const link = document.createElement("a");
@@ -984,30 +1117,43 @@ function generaReportTestoSenzaMargine() {
   const checkboxServizi = document.getElementById("toggleMostraServizi");
   const mostraServizi = checkboxServizi && checkboxServizi.checked;
 
-  articoliAggiunti.forEach((articolo, index) => {
-    const sconto1 = clamp(parseDec(articolo.sconto || 0), 0, 100);
-    const sconto2 = clamp(parseDec(articolo.sconto2 || 0), 0, 100);
+  const clientMode = !!smartSettings.showClientDiscount;
 
+  articoliAggiunti.forEach((articolo, index) => {
     const prezzoLordo = parseDec(articolo.prezzoLordo || 0);
-    const prezzoScontato = roundTwo(prezzoLordo * (1 - sconto1 / 100) * (1 - sconto2 / 100));
     const quantita = Math.max(1, parseInt(articolo.quantita || 1, 10) || 1);
 
+    let prezzoNetto = 0;
+
+    if (clientMode) {
+      const sc = clamp(parseDec(articolo.scontoCliente || 0), 0, 100);
+      prezzoNetto = roundTwo(prezzoLordo * (1 - sc / 100));
+    } else {
+      const sconto1 = clamp(parseDec(articolo.sconto || 0), 0, 100);
+      const sconto2 = clamp(parseDec(articolo.sconto2 || 0), 0, 100);
+      prezzoNetto = roundTwo(prezzoLordo * (1 - sconto1 / 100) * (1 - sconto2 / 100));
+    }
+
     const granTotale =
-      (prezzoScontato + Math.max(0, parseDec(articolo.costoTrasporto || 0)) + Math.max(0, parseDec(articolo.costoInstallazione || 0)))
+      (prezzoNetto + Math.max(0, parseDec(articolo.costoTrasporto || 0)) + Math.max(0, parseDec(articolo.costoInstallazione || 0)))
       * quantita;
 
     const granTotaleFinal = roundTwo(granTotale);
 
-    totaleSenzaServizi += prezzoScontato * quantita;
+    totaleSenzaServizi += prezzoNetto * quantita;
     totaleConServizi += granTotaleFinal;
 
     report += `${index + 1}. Codice: ${articolo.codice}\n`;
     report += `Descrizione: ${articolo.descrizione}\n`;
-    report += `Prezzo netto: ${prezzoScontato.toFixed(2)}€\n`;
+    report += `Prezzo netto: ${prezzoNetto.toFixed(2)}€\n`;
 
     if (!smartSettings.hideDiscounts) {
-      report += `Sconto 1: ${sconto1}%\n`;
-      report += `Sconto 2: ${sconto2}%\n`;
+      if (clientMode) {
+        report += `Sconto cliente: ${clamp(parseDec(articolo.scontoCliente || 0), 0, 100).toFixed(2)}%\n`;
+      } else {
+        report += `Sconto 1: ${clamp(parseDec(articolo.sconto || 0), 0, 100)}%\n`;
+        report += `Sconto 2: ${clamp(parseDec(articolo.sconto2 || 0), 0, 100)}%\n`;
+      }
     }
 
     report += `Quantità: ${quantita}\n`;
@@ -1039,14 +1185,14 @@ function generaReportTestoSenzaMargine() {
 }
 
 function inviaReportWhatsAppSenzaMargine() {
-  window.track?.report_whatsapp?.({ variant: smartSettings.smartMode ? 'smart' : 'no_margin' });
+  window.track?.report_whatsapp?.({ variant: smartSettings.smartMode ? 'smart' : (smartSettings.showClientDiscount ? 'client_discount_no_margin' : 'no_margin') });
   const report = generaReportTestoSenzaMargine();
   const whatsappUrl = "https://api.whatsapp.com/send?text=" + encodeURIComponent(report);
   window.open(whatsappUrl, '_blank');
 }
 
 function generaTXTReportSenzaMargine() {
-  window.track?.csv_export?.({ format: smartSettings.smartMode ? 'txt_smart' : 'txt_no_margin' });
+  window.track?.csv_export?.({ format: smartSettings.smartMode ? 'txt_smart' : (smartSettings.showClientDiscount ? 'txt_client_discount_no_margin' : 'txt_no_margin') });
   const report = generaReportTestoSenzaMargine();
   const blob = new Blob([report], { type: "text/plain" });
   const link = document.createElement("a");
