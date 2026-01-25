@@ -1,6 +1,6 @@
 /* =========================
-   CSVXpressSmart — style.css
-   Fix: tabella centrata, colonne allineate, input decimali comodi
+   CSVXpressSmart — style.css (REV)
+   Fix: header leggibili, nessuna sovrapposizione, tabella stabile
    ========================= */
 
 :root{
@@ -38,14 +38,11 @@ header{
   gap: 10px;
 }
 
-.logo{
-  height: 40px;
-  width: 40px;
-}
+.logo{ height: 40px; width: 40px; }
 
 main{
   padding: 1em;
-  max-width: 1200px; /* ✅ più largo per evitare “decentramenti” */
+  max-width: 1200px;
   margin: auto;
   background-color: var(--panel);
   box-shadow: 0 0 10px rgba(0,0,0,0.1);
@@ -64,7 +61,7 @@ button{
   margin-bottom: 1em;
   padding: 0.55em 0.6em;
   width: 100%;
-  max-width: 520px; /* ✅ un po’ più comodo */
+  max-width: 520px;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: #fff;
@@ -123,11 +120,13 @@ button:active{ transform: translateY(1px); }
 
 .smart-controls .chk{
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   margin: 8px 0;
-  max-width: 640px;
+  max-width: 760px;
 }
+
+.smart-controls .chk input{ margin-top: 2px; }
 
 .smart-controls .vat-row{
   display: flex;
@@ -146,116 +145,153 @@ button:active{ transform: translateY(1px); }
   margin: 0;
 }
 
-/* =========================
-   Tabella — FIX allineamento
-   ========================= */
-
-/* ✅ evita che la tabella “sfugga” e consente scroll orizzontale su schermi piccoli */
-#articoli-section{
-  overflow-x: auto;
+.smart-controls .smart-info{
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(0,0,0,.15);
 }
 
-/* ✅ colonne stabili: header e body sempre allineati */
+/* =========================
+   Tabella — FIX definitivo
+   ========================= */
+
+/* scroll orizzontale pulito */
+#articoli-section{
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* tabella: min-width evita “schiacciamento” che impasta l’header */
 #articoli-table{
   width: 100%;
+  min-width: 980px;
   border-collapse: collapse;
   table-layout: fixed;
   margin: 0 auto;
   background: #fff;
 }
 
-/* Bordo coerente */
+/* celle: niente sbordi, niente sovrapposizioni */
 #articoli-table th,
 #articoli-table td{
   padding: 0.55em 0.6em;
-  text-align: center;
   border: 1px solid var(--line);
   vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Header leggibile */
+/* HEADER: wrap controllato (questa è la chiave) */
 #articoli-table th{
   background: rgba(33,150,243,.08);
   font-weight: 700;
+  font-size: 13px;
+  line-height: 1.15;
+  text-align: center;
+
+  white-space: normal;      /* consenti a capo */
+  word-break: break-word;   /* spezza parole lunghe */
+  hyphens: auto;            /* se supportato */
 }
 
-/* ✅ input sempre dentro la cella e non “spinge” le colonne */
+/* BODY: numeri puliti e coerenti */
+#articoli-table td{
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap; /* evita numeri su due righe */
+}
+
+/* input: non deve mai “spingere” */
 #articoli-table td input{
   width: 100%;
   max-width: none;
   margin: 0;
-  padding: 0.4em 0.45em;
+  padding: 0.38em 0.45em;
   border-radius: 8px;
   border: 1px solid rgba(0,0,0,.18);
-  text-align: right;          /* ✅ numeri a destra */
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-/* Campi testo (codice/descrizione) */
+/* testo: codice/descrizione a sinistra */
 #articoli-table td[data-col="codice"],
 #articoli-table td[data-col="descrizione"]{
   text-align: left;
+  white-space: nowrap;
 }
 
-/* ✅ larghezze consigliate per mantenere stabile l’impaginazione */
+/* prezzi/risultati a destra */
+#articoli-table td[data-col="prezzoLordo"],
+#articoli-table td[data-col="totaleNetto"],
+#articoli-table td[data-col="granTot"],
+#articoli-table td[data-col="venduto"],
+#articoli-table td[data-col="diff"]{
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* LARGHEZZE COLONNE (stabili con table-layout:fixed) */
 #articoli-table th[data-col="codice"],
 #articoli-table td[data-col="codice"]{ width: 110px; }
 
 #articoli-table th[data-col="descrizione"],
-#articoli-table td[data-col="descrizione"]{ width: 320px; }
+#articoli-table td[data-col="descrizione"]{ width: 330px; }
 
 #articoli-table th[data-col="prezzoLordo"],
 #articoli-table td[data-col="prezzoLordo"]{ width: 120px; }
 
+/* sconti / margine / sconto cliente */
 #articoli-table th[data-col="sconto1"],
-#articoli-table td[data-col="sconto1"],
+#articoli-table td[data-col="sconto1"]{ width: 78px; }
+
 #articoli-table th[data-col="sconto2"],
-#articoli-table td[data-col="sconto2"],
+#articoli-table td[data-col="sconto2"]{ width: 78px; }
+
 #articoli-table th[data-col="margine"],
-#articoli-table td[data-col="margine"]{ width: 95px; }
+#articoli-table td[data-col="margine"]{ width: 90px; }
+
+#articoli-table th[data-col="scontoCliente"],
+#articoli-table td[data-col="scontoCliente"]{ width: 95px; }
 
 #articoli-table th[data-col="totaleNetto"],
-#articoli-table td[data-col="totaleNetto"]{ width: 120px; }
+#articoli-table td[data-col="totaleNetto"]{ width: 95px; }
 
 #articoli-table th[data-col="trasporto"],
-#articoli-table td[data-col="trasporto"],
+#articoli-table td[data-col="trasporto"]{ width: 95px; }
+
 #articoli-table th[data-col="installazione"],
-#articoli-table td[data-col="installazione"]{ width: 120px; }
+#articoli-table td[data-col="installazione"]{ width: 85px; }
 
 #articoli-table th[data-col="qta"],
-#articoli-table td[data-col="qta"]{ width: 80px; }
+#articoli-table td[data-col="qta"]{ width: 70px; }
 
 #articoli-table th[data-col="granTot"],
-#articoli-table td[data-col="granTot"]{ width: 130px; }
+#articoli-table td[data-col="granTot"]{ width: 110px; }
 
 #articoli-table th[data-col="venduto"],
-#articoli-table td[data-col="venduto"]{ width: 130px; }
+#articoli-table td[data-col="venduto"]{ width: 110px; }
 
 #articoli-table th[data-col="diff"],
-#articoli-table td[data-col="diff"]{ width: 140px; }
+#articoli-table td[data-col="diff"]{ width: 95px; }
 
 #articoli-table th[data-col="azioni"],
-#articoli-table td[data-col="azioni"]{ width: 110px; }
+#articoli-table td[data-col="azioni"]{ width: 80px; }
 
-/* Pulsante rimuovi in tabella */
+/* pulsante azioni */
 #articoli-table td[data-col="azioni"] button{
   width: 100%;
   max-width: none;
   margin: 0;
-  padding: 0.45em 0.6em;
+  padding: 0.42em 0.55em;
 }
 
 /* =========================
    Utility
    ========================= */
-
-/* hide columns */
 .col-hidden{ display: none !important; }
-
-/* muted helper */
 .muted{ color: var(--muted); }
 
-/* Responsive piccoli schermi */
+/* Mobile */
 @media (max-width: 720px){
   main{ padding: 12px; }
   input[type="file"],
@@ -263,4 +299,7 @@ button:active{ transform: translateY(1px); }
   input[type="number"],
   select,
   button{ max-width: 100%; }
+
+  /* su mobile mantieni comunque scorrimento */
+  #articoli-table{ min-width: 980px; }
 }
