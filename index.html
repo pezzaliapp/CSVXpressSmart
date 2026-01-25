@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it" data-app="CSVXpressSmart" data-ver="1.0.1">
+<html lang="it" data-app="CSVXpressSmart" data-ver="1.0.2">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -128,10 +128,10 @@
           Ometti Sconti (Sconto 1 / Sconto 2) nel report
         </label>
 
-        <!-- ✅ mostra lo sconto al cliente nel report SMART (gestito da app.js) -->
+        <!-- ✅ FLAG: attiva la modalità "Sconto Cliente" (tabella + logica, gestito da app.js) -->
         <label class="chk">
           <input type="checkbox" id="toggleShowClientDiscount">
-          Mostra “Sconto cliente” nel report Smart
+          Attiva “Sconto cliente” (sostituisce Sconto 1/2 e Margine mantenendo invariato il prezzo finale)
         </label>
 
         <!-- INFO SEMPRE VISIBILE – SOLO UI, NON REPORT -->
@@ -147,9 +147,15 @@
             <th data-col="codice">Codice</th>
             <th data-col="descrizione">Descrizione</th>
             <th data-col="prezzoLordo">Prezzo Lordo</th>
+
             <th data-col="sconto1">Sconto 1%</th>
             <th data-col="sconto2">Sconto 2%</th>
+
+            <!-- ✅ NEW: colonna "Sconto cliente" (mostrata solo quando il flag è ON) -->
+            <th data-col="scontoCliente">Sconto cliente %</th>
+
             <th data-col="margine">Margine %</th>
+
             <th data-col="totaleNetto">Totale</th>
             <th data-col="trasporto">Trasporto</th>
             <th data-col="installazione">Installazione</th>
