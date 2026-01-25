@@ -13,19 +13,16 @@
   <!-- Styles -->
   <link rel="stylesheet" href="style.css">
 
-  <!-- ✅ FIX (tabella centrata + colonne stabili + input decimali usabili) -->
+  <!-- ✅ micro-fix minimi (il grosso sta in style.css) -->
   <style>
-    main{max-width:1200px;margin:0 auto;padding:16px}
-    #articoli-section{overflow-x:auto}
-    #articoli-table{width:100%;table-layout:fixed;border-collapse:collapse}
-    #articoli-table th,#articoli-table td{padding:8px;vertical-align:middle}
-    #articoli-table input{width:100%;box-sizing:border-box}
-
     /* Nasconde colonne via class col-hidden (app.js) */
     .col-hidden{display:none !important}
 
     /* Report: preserva a capo e spazi */
-    .report-preview{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+    .report-preview{
+      white-space:pre-wrap;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace
+    }
   </style>
 
   <!-- Google Analytics 4 -->
@@ -87,7 +84,7 @@
       <label for="searchListino">Cerca: </label>
       <input type="text" id="searchListino" placeholder="Inserisci codice o descrizione">
       <select id="listinoSelect"></select>
-      <button id="btnAddFromListino" onclick="aggiungiArticoloDaListino()">Aggiungi Articolo Selezionato</button>
+      <button id="btnAddFromListino" onclick="aggiungiArticoloDaListino()">Aggiungi Articolo</button>
     </section>
 
     <section id="articoli-section" data-zone="tabella_articoli">
@@ -108,35 +105,33 @@
         </label>
 
         <div class="vat-row">
-          <label for="vatRate">Aliquota IVA %</label>
-          <!-- ✅ meglio text+inputmode decimal per virgola (compatibilità) -->
+          <label for="vatRate">IVA %</label>
           <input type="text" id="vatRate" value="22" inputmode="decimal" autocomplete="off" spellcheck="false">
         </div>
 
         <label class="chk">
           <input type="checkbox" id="toggleHideVenduto">
-          Ometti “Venduto A €”
+          Ometti “Vend.€”
         </label>
 
         <label class="chk">
           <input type="checkbox" id="toggleHideDiff">
-          Ometti “Differenza sconto”
+          Ometti “Diff.”
         </label>
 
         <label class="chk">
           <input type="checkbox" id="toggleHideDiscounts">
-          Ometti Sconti (Sconto 1 / Sconto 2) nel report
+          Ometti Sc.1/Sc.2 nel report
         </label>
 
-        <!-- ✅ FLAG: attiva la modalità "Sconto Cliente" (tabella + logica, gestito da app.js) -->
+        <!-- ✅ FLAG: attiva la modalità "Sconto Cliente" -->
         <label class="chk">
           <input type="checkbox" id="toggleShowClientDiscount">
-          Attiva “Sconto cliente” (sostituisce Sconto 1/2 e Margine mantenendo invariato il prezzo finale)
+          Attiva “Sc.Cliente” (sostituisce Sc.1/Sc.2 + Marg.% a prezzo invariato)
         </label>
 
-        <!-- INFO SEMPRE VISIBILE – SOLO UI, NON REPORT -->
         <div class="smart-info">
-          <strong>Sconto equivalente cliente:</strong>
+          <strong>Sconto eq. cliente:</strong>
           <span id="smartEquivalentDiscount">—</span>
         </div>
       </div>
@@ -144,26 +139,26 @@
       <table id="articoli-table" border="1">
         <thead>
           <tr>
-            <th data-col="codice">Codice</th>
-            <th data-col="descrizione">Descrizione</th>
-            <th data-col="prezzoLordo">Prezzo Lordo</th>
+            <th data-col="codice" title="Codice">Codice</th>
+            <th data-col="descrizione" title="Descrizione">Descrizione</th>
+            <th data-col="prezzoLordo" title="Prezzo Lordo">P. Lordo</th>
 
-            <th data-col="sconto1">Sconto 1%</th>
-            <th data-col="sconto2">Sconto 2%</th>
+            <th data-col="sconto1" title="Sconto 1%">Sc.1%</th>
+            <th data-col="sconto2" title="Sconto 2%">Sc.2%</th>
 
-            <!-- ✅ NEW: colonna "Sconto cliente" (mostrata solo quando il flag è ON) -->
-            <th data-col="scontoCliente">Sconto cliente %</th>
+            <!-- ✅ NEW -->
+            <th data-col="scontoCliente" title="Sconto cliente %">Sc.Cliente%</th>
 
-            <th data-col="margine">Margine %</th>
+            <th data-col="margine" title="Margine %">Marg.%</th>
 
-            <th data-col="totaleNetto">Totale</th>
-            <th data-col="trasporto">Trasporto</th>
-            <th data-col="installazione">Installazione</th>
-            <th data-col="qta">Q.tà</th>
-            <th data-col="granTot">Gran Tot</th>
-            <th data-col="venduto">Venduto A €</th>
-            <th data-col="diff">Differenza sconto</th>
-            <th data-col="azioni">Azioni</th>
+            <th data-col="totaleNetto" title="Totale">Totale</th>
+            <th data-col="trasporto" title="Trasporto">Trasp.</th>
+            <th data-col="installazione" title="Installazione">Inst.</th>
+            <th data-col="qta" title="Quantità">Qtà</th>
+            <th data-col="granTot" title="Gran Totale">Tot.</th>
+            <th data-col="venduto" title="Venduto A €">Vend.€</th>
+            <th data-col="diff" title="Differenza sconto">Diff.</th>
+            <th data-col="azioni" title="Azioni">Az.</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -173,15 +168,14 @@
     <section id="report-section" data-zone="report_export">
       <h2>Report Articoli</h2>
 
-      <button id="btnWA" onclick="inviaReportWhatsApp()">Invia Report su WhatsApp</button>
-      <button id="btnTXT" onclick="generaPDFReport()">Genera TXT Report</button>
+      <button id="btnWA" onclick="inviaReportWhatsApp()">Invia WhatsApp</button>
+      <button id="btnTXT" onclick="generaPDFReport()">Genera TXT</button>
 
       <br><br>
 
-      <button id="btnWASenzaMargine" onclick="inviaReportWhatsAppSenzaMargine()">Invia Report su WhatsApp Senza Margine</button>
-      <button id="btnTXTSenzaMargine" onclick="generaTXTReportSenzaMargine()">Genera TXT Report Senza Margine</button>
+      <button id="btnWASenzaMargine" onclick="inviaReportWhatsAppSenzaMargine()">WA (No Marg.)</button>
+      <button id="btnTXTSenzaMargine" onclick="generaTXTReportSenzaMargine()">TXT (No Marg.)</button>
 
-      <!-- ✅ opzionale: preview leggibile in pagina (non rompe nulla se non lo usi) -->
       <div id="reportPreview" class="report-preview" style="margin-top:14px; display:none;"></div>
     </section>
   </main>
