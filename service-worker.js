@@ -1,7 +1,7 @@
 // service-worker.js
 // CSVXpressSmart — Service Worker
 // Versione: bumpare SEMPRE quando cambiano asset
-const CACHE_VERSION = 'v1.2.0';
+const CACHE_VERSION = 'v1.2.1';
 const CACHE_NAME = `csvxpresssmart-${CACHE_VERSION}`;
 
 // Asset locali da cacheare (app shell)
@@ -9,11 +9,12 @@ const APP_SHELL = [
   './',
   './index.html',
   './style.css',
-  './style.mobile.cards.rev.v2.css',   // ✅ nuovo CSS mobile
+  './style.mobile.cards.rev.v3.css',   // ✅ nuovo CSS mobile
   './app.js',
   './manifest.json',
   './icon/CSVXpressSmart-192.png',
-  './icon/CSVXpressSmart-512.png'
+  './icon/CSVXpressSmart-512.png',
+  './icon/CSVXpressSmart-1024.png'
 ];
 
 // CDN (cache opportunistica)
@@ -128,3 +129,11 @@ function eventPreloadResponse() {
   // quindi qui restituiamo null sempre: è safe. (manteniamo compatibilità)
   return Promise.resolve(null);
 }
+
+
+// Permette alla pagina di forzare l'attivazione del nuovo SW
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});

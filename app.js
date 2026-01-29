@@ -4,12 +4,45 @@
    + Feature: "Sconto Cliente" (flag) che sostituisce sconto1/sconto2/margine mantenendo invariato il prezzo finale
    =========================== */
 
-// Registra il Service Worker (PWA)
+// Registra il Service Worker (PWA) — update robusto (iOS/Android/Desktop)
+// - registra con cache-bust (?v=...)
+// - check update ad ogni apertura
+// - attiva subito la nuova versione (skipWaiting via message)
+// - reload automatico quando cambia controller (una sola volta)
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js')
-    .then(reg => console.log("Service Worker registrato", reg))
-    .catch(err => console.error("Service Worker non registrato", err));
+  window.addEventListener('load', async () => {
+    const VER = document.documentElement.getAttribute('data-ver') || 'dev';
+    const SW_URL = `service-worker.js?v=${encodeURIComponent(VER)}`;
+
+    try {
+      const reg = await navigator.serviceWorker.register(SW_URL);
+      console.log('Service Worker registrato', reg);
+
+      try { await reg.update(); } catch (_) {}
+
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => {
+          // nuovo SW pronto e c'è già un controller -> forza attivazione
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            try { nw.postMessage({ type: 'SKIP_WAITING' }); } catch (_) {}
+          }
+        });
+      });
+
+      // quando il nuovo SW prende controllo -> ricarica 1 volta
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (sessionStorage.getItem('sw_reloaded')) return;
+        sessionStorage.setItem('sw_reloaded', '1');
+        window.location.reload();
+      });
+    } catch (err) {
+      console.error('Service Worker non registrato', err);
+    }
+  });
 }
+
 
 // Variabili globali
 let listino = [];
@@ -680,7 +713,7 @@ function renderTabellaArticoli() {
 
   // Micro stile input (stabilizza layout)
   tableBody.querySelectorAll('input.cell-input').forEach(inp => {
-    inp.style.width = '100%';
+    // Evita width inline: la larghezza su mobile è gestita da CSS (cards)
     inp.style.boxSizing = 'border-box';
   });
 
