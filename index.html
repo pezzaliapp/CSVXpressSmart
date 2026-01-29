@@ -1,20 +1,17 @@
 <!DOCTYPE html>
-<html lang="it" data-app="CSVXpressSmart" data-ver="1.0.2">
+
+<html data-app="CSVXpressSmart" data-ver="1.0.2" lang="it">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>CSVXpressSmart</title>
-
-  <!-- PWA -->
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#ffffff">
-
-  <!-- Styles -->
-  <link rel="stylesheet" href="style.css">
-
-  <!-- ✅ micro-fix minimi (il grosso sta in style.css) -->
-  <style>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
+<title>CSVXpressSmart</title>
+<!-- PWA -->
+<link href="manifest.json" rel="manifest"/>
+<meta content="#ffffff" name="theme-color"/>
+<!-- Styles -->
+<link href="style.css" rel="stylesheet"/><link href="style.mobile.rev.css" rel="stylesheet"/>
+<!-- ✅ micro-fix minimi (il grosso sta in style.css) -->
+<style>
     /* Nasconde colonne via class col-hidden (app.js) */
     .col-hidden{display:none !important}
 
@@ -23,168 +20,140 @@
       white-space:pre-wrap;
       font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace
     }
-  </style>
-
-  <!-- Google Analytics 4 -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-QZ7CQDJX3E"></script>
-  <script>
+  
+    /* Accessibilità: testo solo per screen reader */
+    .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+</style>
+<!-- Google Analytics 4 -->
+<script async="" src="https://www.googletagmanager.com/gtag/js?id=G-QZ7CQDJX3E"></script>
+<script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
     gtag('config', 'G-QZ7CQDJX3E', { anonymize_ip: true });
   </script>
-
-  <!-- Microsoft Clarity -->
-  <script type="text/javascript">
+<!-- Microsoft Clarity -->
+<script type="text/javascript">
     (function(c,l,a,r,i,t,y){
       c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
       t=l.createElement(r); t.async=1; t.src="https://www.clarity.ms/tag/"+i;
       y=l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t,y);
     })(window, document, "clarity", "script", "uy8owdlf8z");
   </script>
-</head>
-
+<meta content="yes" name="apple-mobile-web-app-capable"/><meta content="default" name="apple-mobile-web-app-status-bar-style"/><meta content="telephone=no" name="format-detection"/><link href="icon/CSVXpressSmart-1024.png" rel="apple-touch-icon"/><meta content="#0b0f14" media="(prefers-color-scheme: dark)" name="theme-color"/></head>
 <body>
-  <header data-zone="header">
-    <div class="logo-container">
-      <img src="icon/CSVXpressSmart-1024.png" alt="CSVXpressSmart Logo" class="logo">
-      <h1>CSVXpressSmart</h1>
-    </div>
-  </header>
-
-  <main>
-    <section id="upload-section" data-zone="upload_csv">
-      <h2>Carica Listino CSV</h2>
-      <input type="file" id="csvFileInput" accept=".csv">
-      <p id="csvError" style="color: red; display: none;">Errore nel caricamento del file CSV.</p>
-
-      <!-- ✅ Memoria CSV (IndexedDB via app.js) -->
-      <div id="csv-memory" class="csv-memory" style="margin-top:12px;">
-        <h3 style="margin:0 0 6px 0;">Memoria CSV</h3>
-
-        <label class="chk" style="display:block; margin:6px 0;">
-          <input type="checkbox" id="toggleRememberCSV" checked>
+<header data-zone="header">
+<div class="logo-container">
+<img alt="CSVXpressSmart Logo" class="logo" src="icon/CSVXpressSmart-1024.png"/>
+<h1>CSVXpressSmart</h1>
+</div>
+</header>
+<main><p class="sr-only" id="deviceHint">Su smartphone puoi scorrere la tabella orizzontalmente.</p>
+<section data-zone="upload_csv" id="upload-section">
+<h2>Carica Listino CSV</h2>
+<input accept=".csv" aria-label="Seleziona file CSV" id="csvFileInput" type="file"/>
+<p id="csvError" style="color: red; display: none;">Errore nel caricamento del file CSV.</p>
+<!-- ✅ Memoria CSV (IndexedDB via app.js) -->
+<div class="csv-memory" id="csv-memory" style="margin-top:12px;">
+<h3 style="margin:0 0 6px 0;">Memoria CSV</h3>
+<label class="chk" style="display:block; margin:6px 0;">
+<input checked="" id="toggleRememberCSV" type="checkbox"/>
           Ricorda l’ultimo CSV (non dovrai ricaricarlo ad ogni apertura)
         </label>
-
-        <div class="csv-memory-actions" style="display:flex; gap:8px; flex-wrap:wrap; margin:8px 0;">
-          <button id="btnLoadSavedCSV" type="button">Carica CSV salvato</button>
-          <button id="btnClearSavedCSV" type="button">Cancella CSV salvato</button>
-        </div>
-
-        <div id="savedCsvInfo" class="muted" style="opacity:.8; font-size:13px;">
+<div class="csv-memory-actions" style="display:flex; gap:8px; flex-wrap:wrap; margin:8px 0;">
+<button id="btnLoadSavedCSV" type="button">Carica CSV salvato</button>
+<button id="btnClearSavedCSV" type="button">Cancella CSV salvato</button>
+</div>
+<div class="muted" id="savedCsvInfo" style="opacity:.8; font-size:13px;">
           Nessun CSV salvato.
         </div>
-      </div>
-      <!-- /Memoria CSV -->
-    </section>
-
-    <section id="listino-section" data-zone="selezione_listino">
-      <h2>Filtra e Seleziona Articolo dal Listino</h2>
-      <label for="searchListino">Cerca: </label>
-      <input type="text" id="searchListino" placeholder="Inserisci codice o descrizione">
-      <select id="listinoSelect"></select>
-      <button id="btnAddFromListino" onclick="aggiungiArticoloDaListino()">Aggiungi Articolo</button>
-    </section>
-
-    <section id="articoli-section" data-zone="tabella_articoli">
-      <h2>Articoli Aggiunti</h2>
-
-      <!-- CONTROLLI SMART -->
-      <div id="smart-controls" class="smart-controls">
-        <h3>Modalità Preventivo / Ordine (Smart)</h3>
-
-        <label class="chk">
-          <input type="checkbox" id="toggleSmartMode">
+</div>
+<!-- /Memoria CSV -->
+</section>
+<section data-zone="selezione_listino" id="listino-section">
+<h2>Filtra e Seleziona Articolo dal Listino</h2>
+<label for="searchListino">Cerca: </label>
+<input id="searchListino" placeholder="Inserisci codice o descrizione" type="text"/>
+<select id="listinoSelect"></select>
+<button id="btnAddFromListino" onclick="aggiungiArticoloDaListino()">Aggiungi Articolo</button>
+</section>
+<section data-zone="tabella_articoli" id="articoli-section">
+<h2>Articoli Aggiunti</h2>
+<!-- CONTROLLI SMART -->
+<div class="smart-controls" id="smart-controls">
+<h3>Modalità Preventivo / Ordine (Smart)</h3>
+<label class="chk">
+<input id="toggleSmartMode" type="checkbox"/>
           Modalità Cliente (Smart)
         </label>
-
-        <label class="chk">
-          <input type="checkbox" id="toggleShowVAT">
+<label class="chk">
+<input id="toggleShowVAT" type="checkbox"/>
           Mostra IVA
         </label>
-
-        <div class="vat-row">
-          <label for="vatRate">IVA %</label>
-          <input type="text" id="vatRate" value="22" inputmode="decimal" autocomplete="off" spellcheck="false">
-        </div>
-
-        <label class="chk">
-          <input type="checkbox" id="toggleHideVenduto">
+<div class="vat-row">
+<label for="vatRate">IVA %</label>
+<input autocomplete="off" id="vatRate" inputmode="decimal" spellcheck="false" type="text" value="22"/>
+</div>
+<label class="chk">
+<input id="toggleHideVenduto" type="checkbox"/>
           Ometti “Vend.€”
         </label>
-
-        <label class="chk">
-          <input type="checkbox" id="toggleHideDiff">
+<label class="chk">
+<input id="toggleHideDiff" type="checkbox"/>
           Ometti “Diff.”
         </label>
-
-        <label class="chk">
-          <input type="checkbox" id="toggleHideDiscounts">
+<label class="chk">
+<input id="toggleHideDiscounts" type="checkbox"/>
           Ometti Sc.1/Sc.2 nel report
         </label>
-
-        <!-- ✅ FLAG: attiva la modalità "Sconto Cliente" -->
-        <label class="chk">
-          <input type="checkbox" id="toggleShowClientDiscount">
+<!-- ✅ FLAG: attiva la modalità "Sconto Cliente" -->
+<label class="chk">
+<input id="toggleShowClientDiscount" type="checkbox"/>
           Attiva “Sc.Cliente” (sostituisce Sc.1/Sc.2 + Marg.% a prezzo invariato)
         </label>
+<div class="smart-info">
+<strong>Sconto eq. cliente:</strong>
+<span id="smartEquivalentDiscount">—</span>
+</div>
+</div>
+<table border="1" id="articoli-table">
+<thead>
+<tr>
+<th data-col="codice" title="Codice">Codice</th>
+<th data-col="descrizione" title="Descrizione">Descrizione</th>
+<th data-col="prezzoLordo" title="Prezzo Lordo">P. Lordo</th>
+<th data-col="sconto1" title="Sconto 1%">Sc.1%</th>
+<th data-col="sconto2" title="Sconto 2%">Sc.2%</th>
+<!-- ✅ NEW -->
+<th data-col="scontoCliente" title="Sconto cliente %">Sc.Cliente%</th>
+<th data-col="margine" title="Margine %">Marg.%</th>
+<th data-col="totaleNetto" title="Totale">Totale</th>
+<th data-col="trasporto" title="Trasporto">Trasp.</th>
+<th data-col="installazione" title="Installazione">Inst.</th>
+<th data-col="qta" title="Quantità">Qtà</th>
+<th data-col="granTot" title="Gran Totale">Tot.</th>
+<th data-col="venduto" title="Venduto A €">Vend.€</th>
+<th data-col="diff" title="Differenza sconto">Diff.</th>
+<th data-col="azioni" title="Azioni">Az.</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</section>
+<section data-zone="report_export" id="report-section">
+<h2>Report Articoli</h2><div class="report-actions"><button id="btnWA" onclick="inviaReportWhatsApp()">Invia WhatsApp</button><button id="btnTXT" onclick="generaPDFReport()">Genera TXT</button></div><div class="report-actions report-actions--secondary"><button id="btnWASenzaMargine" onclick="inviaReportWhatsAppSenzaMargine()">WA (No Marg.)</button><button id="btnTXTSenzaMargine" onclick="generaTXTReportSenzaMargine()">TXT (No Marg.)</button></div>
 
-        <div class="smart-info">
-          <strong>Sconto eq. cliente:</strong>
-          <span id="smartEquivalentDiscount">—</span>
-        </div>
-      </div>
 
-      <table id="articoli-table" border="1">
-        <thead>
-          <tr>
-            <th data-col="codice" title="Codice">Codice</th>
-            <th data-col="descrizione" title="Descrizione">Descrizione</th>
-            <th data-col="prezzoLordo" title="Prezzo Lordo">P. Lordo</th>
 
-            <th data-col="sconto1" title="Sconto 1%">Sc.1%</th>
-            <th data-col="sconto2" title="Sconto 2%">Sc.2%</th>
 
-            <!-- ✅ NEW -->
-            <th data-col="scontoCliente" title="Sconto cliente %">Sc.Cliente%</th>
 
-            <th data-col="margine" title="Margine %">Marg.%</th>
-
-            <th data-col="totaleNetto" title="Totale">Totale</th>
-            <th data-col="trasporto" title="Trasporto">Trasp.</th>
-            <th data-col="installazione" title="Installazione">Inst.</th>
-            <th data-col="qta" title="Quantità">Qtà</th>
-            <th data-col="granTot" title="Gran Totale">Tot.</th>
-            <th data-col="venduto" title="Venduto A €">Vend.€</th>
-            <th data-col="diff" title="Differenza sconto">Diff.</th>
-            <th data-col="azioni" title="Azioni">Az.</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </section>
-
-    <section id="report-section" data-zone="report_export">
-      <h2>Report Articoli</h2>
-
-      <button id="btnWA" onclick="inviaReportWhatsApp()">Invia WhatsApp</button>
-      <button id="btnTXT" onclick="generaPDFReport()">Genera TXT</button>
-
-      <br><br>
-
-      <button id="btnWASenzaMargine" onclick="inviaReportWhatsAppSenzaMargine()">WA (No Marg.)</button>
-      <button id="btnTXTSenzaMargine" onclick="generaTXTReportSenzaMargine()">TXT (No Marg.)</button>
-
-      <div id="reportPreview" class="report-preview" style="margin-top:14px; display:none;"></div>
-    </section>
-  </main>
-
-  <!-- Librerie necessarie -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-
-  <!-- Tracking bridge (GA4 + Clarity) -->
-  <script>
+<div class="report-preview" id="reportPreview" style="margin-top:14px; display:none;"></div>
+</section>
+</main>
+<!-- Librerie necessarie -->
+<script defer="" src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+<!-- Tracking bridge (GA4 + Clarity) -->
+<script>
     (function () {
       const APP = document.documentElement.getAttribute('data-app') || 'CSVXpressSmart';
       const VER = document.documentElement.getAttribute('data-ver') || 'dev';
@@ -237,8 +206,7 @@
       });
     })();
   </script>
-
-  <!-- App -->
-  <script src="app.js"></script>
+<!-- App -->
+<script defer="" src="app.js"></script>
 </body>
 </html>
