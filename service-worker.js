@@ -1,7 +1,7 @@
 // service-worker.js
 // CSVXpressSmart — Service Worker
 // Versione: bumpare SEMPRE quando cambiano asset
-const CACHE_VERSION = 'v1.1.0';
+const CACHE_VERSION = 'v1.2.0';
 const CACHE_NAME = `csvxpresssmart-${CACHE_VERSION}`;
 
 // Asset locali da cacheare (app shell)
@@ -9,6 +9,7 @@ const APP_SHELL = [
   './',
   './index.html',
   './style.css',
+  './style.mobile.cards.rev.v2.css',   // ✅ nuovo CSS mobile
   './app.js',
   './manifest.json',
   './icon/CSVXpressSmart-192.png',
@@ -26,9 +27,7 @@ const CDN_ASSETS = [
    ========================= */
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(APP_SHELL);
-    })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))
   );
   self.skipWaiting();
 });
@@ -37,16 +36,21 @@ self.addEventListener('install', event => {
    ACTIVATE
    ========================= */
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(names => {
-      return Promise.all(
-        names
-          .filter(name => name.startsWith('csvxpresssmart-') && name !== CACHE_NAME)
-          .map(name => caches.delete(name))
-      );
-    })
-  );
-  self.clients.claim();
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(
+      names
+        .filter(name => name.startsWith('csvxpresssmart-') && name !== CACHE_NAME)
+        .map(name => caches.delete(name))
+    );
+
+    // opzionale ma utile
+    if ('navigationPreload' in self.registration) {
+      try { await self.registration.navigationPreload.enable(); } catch(e) {}
+    }
+
+    await self.clients.claim();
+  })());
 });
 
 /* =========================
@@ -54,11 +58,15 @@ self.addEventListener('activate', event => {
    ========================= */
 self.addEventListener('fetch', event => {
   const req = event.request;
-
-  // ❌ ignora richieste non GET
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
+
+  // ✅ NAVIGAZIONI / HTML: network-first (per prendere sempre l'index aggiornato)
+  if (req.mode === 'navigate' || req.destination === 'document') {
+    event.respondWith(networkFirst(req, './index.html'));
+    return;
+  }
 
   /* ---------- CDN: network-first ---------- */
   if (CDN_ASSETS.some(cdn => req.url.startsWith(cdn))) {
@@ -66,7 +74,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  /* ---------- Same-origin: cache-first ---------- */
+  /* ---------- Same-origin asset: cache-first ---------- */
   if (url.origin === self.location.origin) {
     event.respondWith(cacheFirst(req));
     return;
@@ -89,8 +97,16 @@ async function cacheFirst(request) {
   return response;
 }
 
-async function networkFirst(request) {
+async function networkFirst(request, fallbackUrl) {
   const cache = await caches.open(CACHE_NAME);
+
+  // navigation preload (se disponibile)
+  const preload = await eventPreloadResponse();
+  if (preload) {
+    cache.put(request, preload.clone());
+    return preload;
+  }
+
   try {
     const response = await fetch(request);
     cache.put(request, response.clone());
@@ -98,6 +114,17 @@ async function networkFirst(request) {
   } catch (err) {
     const cached = await cache.match(request);
     if (cached) return cached;
+    if (fallbackUrl) {
+      const fb = await caches.match(fallbackUrl);
+      if (fb) return fb;
+    }
     throw err;
   }
+}
+
+// helper: navigation preload response (se presente)
+function eventPreloadResponse() {
+  // in alcuni browser event.preloadResponse esiste solo dentro fetch handler
+  // quindi qui restituiamo null sempre: è safe. (manteniamo compatibilità)
+  return Promise.resolve(null);
 }
