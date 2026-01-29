@@ -2,30 +2,44 @@
 
 <html data-app="CSVXpressSmart" data-ver="1.0.2" lang="it">
 <head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
-<title>CSVXpressSmart</title>
-<!-- PWA -->
-<link href="manifest.json" rel="manifest"/>
-<meta content="#ffffff" name="theme-color"/>
-<!-- Styles -->
-<link href="style.css" rel="stylesheet"/><link href="style.mobile.cards.rev.css" rel="stylesheet"/>
-<!-- ✅ micro-fix minimi (il grosso sta in style.css) -->
-<style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>CSVXpressSmart</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json"/>
+  <meta name="theme-color" content="#ffffff"/>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="style.mobile.cards.rev.v2.css"/>
+
+  <!-- ✅ micro-fix minimi (il grosso sta in style.css) -->
+  <style>
     /* Nasconde colonne via class col-hidden (app.js) */
     .col-hidden{display:none !important}
 
     /* Report: preserva a capo e spazi */
     .report-preview{
       white-space:pre-wrap;
-      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,
+                   "Liberation Mono","Courier New",monospace;
     }
-  
+
     /* Accessibilità: testo solo per screen reader */
-    .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-</style>
-<!-- Google Analytics 4 -->
-<script async="" src="https://www.googletagmanager.com/gtag/js?id=G-QZ7CQDJX3E"></script>
+    .sr-only{
+      position:absolute!important;
+      width:1px;height:1px;
+      padding:0;margin:-1px;
+      overflow:hidden;
+      clip:rect(0,0,0,0);
+      white-space:nowrap;
+      border:0
+    }
+  </style>
+
+  <!-- Google Analytics 4 -->
+    <script async="" src="https://www.googletagmanager.com/gtag/js?id=G-QZ7CQDJX3E"></script>
 <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
