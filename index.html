@@ -9,7 +9,7 @@
 <link href="manifest.json" rel="manifest"/>
 <meta content="#ffffff" name="theme-color"/>
 <!-- Styles -->
-<link href="style.css" rel="stylesheet"/><link href="style.mobile.rev.css" rel="stylesheet"/>
+<link href="style.css" rel="stylesheet"/><link href="style.mobile.cards.rev.css" rel="stylesheet"/>
 <!-- ✅ micro-fix minimi (il grosso sta in style.css) -->
 <style>
     /* Nasconde colonne via class col-hidden (app.js) */
@@ -48,7 +48,7 @@
 <h1>CSVXpressSmart</h1>
 </div>
 </header>
-<main><p class="sr-only" id="deviceHint">Su smartphone puoi scorrere la tabella orizzontalmente.</p>
+<main><p class="sr-only" id="deviceHint">Su smartphone ogni riga è visualizzata come scheda verticale.</p>
 <section data-zone="upload_csv" id="upload-section">
 <h2>Carica Listino CSV</h2>
 <input accept=".csv" aria-label="Seleziona file CSV" id="csvFileInput" type="file"/>
@@ -142,11 +142,6 @@
 </section>
 <section data-zone="report_export" id="report-section">
 <h2>Report Articoli</h2><div class="report-actions"><button id="btnWA" onclick="inviaReportWhatsApp()">Invia WhatsApp</button><button id="btnTXT" onclick="generaPDFReport()">Genera TXT</button></div><div class="report-actions report-actions--secondary"><button id="btnWASenzaMargine" onclick="inviaReportWhatsAppSenzaMargine()">WA (No Marg.)</button><button id="btnTXTSenzaMargine" onclick="generaTXTReportSenzaMargine()">TXT (No Marg.)</button></div>
-
-
-
-
-
 <div class="report-preview" id="reportPreview" style="margin-top:14px; display:none;"></div>
 </section>
 </main>
