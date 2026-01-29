@@ -303,3 +303,156 @@ button:active{ transform: translateY(1px); }
   /* su mobile mantieni comunque scorrimento */
   #articoli-table{ min-width: 980px; }
 }
+
+/* =========================
+   MOBILE / iPhone 13 mini + Android — Patch (non rompe la logica)
+   Obiettivi:
+   - più leggibile su schermi piccoli
+   - tap target più comodi
+   - niente zoom iOS sugli input
+   - tabella: header sticky + prime colonne sticky + hint scroll
+   ========================= */
+
+/* Tipografia fluida (senza stravolgere desktop) */
+h1, h2{
+  letter-spacing: -0.01em;
+}
+h1{ font-size: clamp(28px, 5.2vw, 44px); }
+h2{ font-size: clamp(22px, 4.3vw, 34px); }
+
+/* Safe area (notch) */
+header{
+  padding-top: calc(1em + env(safe-area-inset-top));
+  padding-left: calc(1em + env(safe-area-inset-left));
+  padding-right: calc(1em + env(safe-area-inset-right));
+}
+
+/* Desktop/tablet: un filo più “denso” */
+@media (min-width: 721px){
+  body{ font-size: 15px; }
+  button{ padding: 0.55em 0.75em; }
+}
+
+/* MOBILE */
+@media (max-width: 720px){
+  body{
+    font-size: 16px; /* evita zoom iOS */
+    background: var(--bg);
+  }
+
+  main{
+    max-width: 100%;
+    margin: 0;
+    padding: 12px;
+    border-radius: 0;
+    box-shadow: none; /* più spazio utile */
+    background: var(--panel);
+  }
+
+  section{ margin-bottom: 18px; }
+
+  /* Bottoni: più alti e leggibili */
+  button{
+    min-height: 46px;
+    border-radius: 12px;
+    font-size: 16px;
+  }
+
+  /* Input: evita zoom iOS + area di tocco */
+  input[type="text"],
+  input[type="number"],
+  select{
+    min-height: 44px;
+    font-size: 16px; /* evita zoom iOS */
+  }
+
+  input[type="file"]{
+    font-size: 16px;
+  }
+
+  /* Box totali più compatto */
+  #totaleGenerale{
+    font-size: 15px;
+    line-height: 1.45;
+    padding: 12px;
+  }
+
+  /* Hint per scroll orizzontale della tabella */
+  #articoli-section{
+    position: relative;
+    padding-top: 26px; /* spazio per il hint */
+  }
+  #articoli-section::before{
+    content: "⇆ Scorri la tabella";
+    position: absolute;
+    top: 6px;
+    left: 10px;
+    font-size: 12px;
+    color: var(--muted);
+    background: rgba(255,255,255,.85);
+    border: 1px solid rgba(0,0,0,.08);
+    padding: 4px 8px;
+    border-radius: 999px;
+    backdrop-filter: blur(6px);
+  }
+
+  /* Tabella: riduco un po’ la min-width per iPhone 13 mini */
+  #articoli-table{
+    min-width: 920px;
+  }
+
+  /* Header sticky (dentro lo scroll orizzontale) */
+  #articoli-table thead th{
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: rgba(33,150,243,.12);
+  }
+
+  /* Prime colonne sticky (codice + descrizione) */
+  #articoli-table th[data-col="codice"],
+  #articoli-table td[data-col="codice"]{
+    position: sticky;
+    left: 0;
+    z-index: 6;
+    background: #fff;
+  }
+  #articoli-table th[data-col="descrizione"],
+  #articoli-table td[data-col="descrizione"]{
+    position: sticky;
+    left: 110px; /* = width codice */
+    z-index: 6;
+    background: #fff;
+  }
+
+  /* Se vuoi anche la colonna Azioni sempre visibile a destra */
+  #articoli-table th[data-col="azioni"],
+  #articoli-table td[data-col="azioni"]{
+    position: sticky;
+    right: 0;
+    z-index: 6;
+    background: #fff;
+  }
+
+  /* Header delle colonne sticky deve “stare sopra” alle celle sticky */
+  #articoli-table thead th[data-col="codice"],
+  #articoli-table thead th[data-col="descrizione"],
+  #articoli-table thead th[data-col="azioni"]{
+    z-index: 7;
+    background: rgba(33,150,243,.16);
+  }
+
+  /* Celle: un filo più compatte */
+  #articoli-table th,
+  #articoli-table td{
+    padding: 0.5em 0.55em;
+  }
+  #articoli-table td{
+    font-size: 13px;
+  }
+  #articoli-table td input{
+    min-height: 38px;
+    font-size: 16px; /* evita zoom iOS anche in tabella */
+  }
+}
+
