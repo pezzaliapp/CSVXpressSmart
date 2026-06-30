@@ -226,20 +226,99 @@ function bindCsvMemoryUI() {
   loadLastCsvPayload().then(updateSavedCsvInfoUI).catch(() => {});
 }
 
+// ALIAS COLONNE — case-insensitive, accetta italiano/inglese/varianti
+const LISTINO_ALIASES = {
+  codice:             ["codice", "code", "codiceart", "codarticolo", "id"],
+  descrizione:        ["descrizione", "description", "desc", "articolo"],
+  prezzoLordo:        ["prezzolordo", "prezzo", "prezzo_eur", "price", "importo", "listino", "prezzo lordo"],
+  costoTrasporto:     ["costotrasporto", "trasporto", "shipping", "spedizione"],
+  costoInstallazione: ["costoinstallazione", "installazione", "installation", "montaggio"],
+  famiglia:           ["famiglia", "family", "linea"],
+  categoria:          ["categoria", "category", "tipo"],
+  pagine:             ["pagine", "pages", "pagina", "page", "catalogo"]
+};
+
+// Storage warning ultima normalizzazione (per debug console)
+let lastNormalizeWarnings = [];
+
+function pickByAlias(row, aliases) {
+  // normalizza chiavi del row: trim + lowercase
+  const normRow = {};
+  for (const k in row) {
+    if (Object.prototype.hasOwnProperty.call(row, k)) {
+      normRow[String(k).trim().toLowerCase()] = row[k];
+    }
+  }
+  for (const alias of aliases) {
+    const v = normRow[alias];
+    if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+  }
+  return undefined;
+}
+
 function normalizeListino(rows) {
-  return rows.map(row => ({
-    codice: (row["Codice"] || "").trim(),
-    descrizione: (row["Descrizione"] || "").trim(),
-    prezzoLordo: parseDec(row["PrezzoLordo"] || "0"),
-    sconto: 0,
-    sconto2: 0,
-    margine: 0,
-    scontoCliente: 0, // NEW
-    costoTrasporto: parseDec(row["CostoTrasporto"] || "0"),
-    costoInstallazione: parseDec(row["CostoInstallazione"] || "0"),
-    quantita: 1,
-    venduto: 0
-  }));
+  lastNormalizeWarnings = [];
+  const out = [];
+  rows.forEach((row, idx) => {
+    const codiceRaw = pickByAlias(row, LISTINO_ALIASES.codice);
+    const prezzoRaw = pickByAlias(row, LISTINO_ALIASES.prezzoLordo);
+
+    // Validazione: codice e prezzo obbligatori
+    if (codiceRaw === undefined || prezzoRaw === undefined) {
+      lastNormalizeWarnings.push({
+        row: idx + 1,
+        reason: codiceRaw === undefined ? "manca codice" : "manca prezzo"
+      });
+      return;
+    }
+
+    const codice = String(codiceRaw).trim();
+    if (!codice) {
+      lastNormalizeWarnings.push({ row: idx + 1, reason: "codice vuoto" });
+      return;
+    }
+
+    const prezzoLordo = parseDec(String(prezzoRaw));
+    if (!isFinite(prezzoLordo) || prezzoLordo <= 0) {
+      lastNormalizeWarnings.push({ row: idx + 1, reason: "prezzo non valido" });
+      return;
+    }
+
+    const descrizioneRaw = pickByAlias(row, LISTINO_ALIASES.descrizione);
+    const descrizione = descrizioneRaw !== undefined
+      ? String(descrizioneRaw).trim()
+      : "(senza descrizione)";
+
+    const costoTrasportoRaw = pickByAlias(row, LISTINO_ALIASES.costoTrasporto);
+    const costoInstallazioneRaw = pickByAlias(row, LISTINO_ALIASES.costoInstallazione);
+    const famigliaRaw = pickByAlias(row, LISTINO_ALIASES.famiglia);
+    const categoriaRaw = pickByAlias(row, LISTINO_ALIASES.categoria);
+    const pagineRaw = pickByAlias(row, LISTINO_ALIASES.pagine);
+
+    out.push({
+      codice,
+      descrizione,
+      prezzoLordo,
+      sconto: 0,
+      sconto2: 0,
+      margine: 0,
+      scontoCliente: 0,
+      costoTrasporto: costoTrasportoRaw !== undefined ? parseDec(String(costoTrasportoRaw)) : 0,
+      costoInstallazione: costoInstallazioneRaw !== undefined ? parseDec(String(costoInstallazioneRaw)) : 0,
+      // Campi nuovi (persistiti per future versioni, non usati in UI ora)
+      famiglia: famigliaRaw !== undefined ? String(famigliaRaw).trim() : "",
+      categoria: categoriaRaw !== undefined ? String(categoriaRaw).trim() : "",
+      pagine: pagineRaw !== undefined ? String(pagineRaw).trim() : "",
+      quantita: 1,
+      venduto: 0
+    });
+  });
+
+  if (lastNormalizeWarnings.length) {
+    console.warn(`[normalizeListino] ${lastNormalizeWarnings.length} righe ignorate:`, lastNormalizeWarnings);
+  }
+
+  return out;
 }
 
 // --- SMART SETTINGS
@@ -503,44 +582,132 @@ function handleCSVUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
 
+  const fileName = (file.name || "").toLowerCase();
+  const isExcel = /\.(xlsx|xlsm|xls)$/i.test(fileName);
+
   window.track?.csv_upload_start?.({ method: 'file_input' });
   window.track?.csv_upload_ok?.({ method: 'file_input', file });
 
-  const t0 = performance.now();
+  if (isExcel) {
+    parseExcelFile(file);
+  } else {
+    parseCsvFile(file);
+  }
+}
 
+function parseCsvFile(file) {
+  const t0 = performance.now();
   Papa.parse(file, {
     header: true,
     skipEmptyLines: true,
     complete: function(results) {
       const ms = Math.round(performance.now() - t0);
-
       if (!results.data.length) {
-        document.getElementById("csvError").style.display = "block";
+        showCsvError();
         window.track?.csv_parse_error?.({ code: 'empty_or_no_rows', ms });
         return;
       }
-
-      listino = normalizeListino(results.data);
-
-      saveLastCsvPayload({
-        listinoRows: listino,
-        meta: { name: file.name, size: file.size, lastModified: file.lastModified, fp: csvFingerprintFromFile(file) }
-      });
-
-      const rows = listino.length;
-      const cols = Array.isArray(results.meta?.fields) ? results.meta.fields.length : undefined;
-      window.track?.csv_parse_ok?.({ rows, cols, ms });
-
-      document.getElementById("csvError").style.display = "none";
-      aggiornaListinoSelect();
+      finalizeListino(results.data, file, ms, Array.isArray(results.meta?.fields) ? results.meta.fields.length : undefined);
     },
     error: function(err) {
       const ms = Math.round(performance.now() - t0);
       console.error("Errore CSV:", err);
-      document.getElementById("csvError").style.display = "block";
+      showCsvError();
       window.track?.csv_parse_error?.({ code: 'papaparse_error', ms });
     }
   });
+}
+
+function parseExcelFile(file) {
+  if (typeof XLSX === 'undefined') {
+    console.error("SheetJS non caricato");
+    showCsvError("Libreria Excel non disponibile. Ricarica la pagina.");
+    window.track?.csv_parse_error?.({ code: 'xlsx_not_loaded', ms: 0 });
+    return;
+  }
+
+  const t0 = performance.now();
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "", blankrows: false });
+      const ms = Math.round(performance.now() - t0);
+
+      if (!rows.length) {
+        showCsvError("Il file Excel non contiene righe valide.");
+        window.track?.csv_parse_error?.({ code: 'excel_empty', ms });
+        return;
+      }
+
+      const cols = rows[0] ? Object.keys(rows[0]).length : undefined;
+      finalizeListino(rows, file, ms, cols);
+    } catch (err) {
+      const ms = Math.round(performance.now() - t0);
+      console.error("Errore parsing Excel:", err);
+      showCsvError("Errore nel caricamento del file Excel.");
+      window.track?.csv_parse_error?.({ code: 'excel_parse_error', ms });
+    }
+  };
+
+  reader.onerror = function() {
+    const ms = Math.round(performance.now() - t0);
+    console.error("Errore lettura file Excel");
+    showCsvError("Impossibile leggere il file.");
+    window.track?.csv_parse_error?.({ code: 'excel_read_error', ms });
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+function finalizeListino(rawRows, file, ms, cols) {
+  listino = normalizeListino(rawRows);
+
+  saveLastCsvPayload({
+    listinoRows: listino,
+    meta: { name: file.name, size: file.size, lastModified: file.lastModified, fp: csvFingerprintFromFile(file) }
+  });
+
+  const loaded = listino.length;
+  const total = rawRows.length;
+  const ignored = total - loaded;
+
+  window.track?.csv_parse_ok?.({ rows: loaded, cols, ms });
+
+  hideCsvError();
+  updateCsvLoadStatus(loaded, ignored);
+  aggiornaListinoSelect();
+}
+
+function showCsvError(message) {
+  const el = document.getElementById("csvError");
+  if (!el) return;
+  if (message) el.textContent = message;
+  el.style.display = "block";
+}
+
+function hideCsvError() {
+  const el = document.getElementById("csvError");
+  if (el) el.style.display = "none";
+}
+
+function updateCsvLoadStatus(loaded, ignored) {
+  const el = document.getElementById("csvLoadStatus");
+  if (!el) return;
+  const artW = loaded === 1 ? "articolo" : "articoli";
+  if (ignored > 0) {
+    const rigW = ignored === 1 ? "riga ignorata" : "righe ignorate";
+    el.textContent = `Caricati ${loaded} ${artW} su ${loaded + ignored} (${ignored} ${rigW})`;
+    el.style.color = "#e65100";
+  } else {
+    el.textContent = `Caricati ${loaded} ${artW}`;
+    el.style.color = "#555";
+  }
+  el.style.display = "block";
 }
 
 function aggiornaListinoSelect() {

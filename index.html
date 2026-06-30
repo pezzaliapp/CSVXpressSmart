@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html data-app="CSVXpressSmart" data-ver="1.0.2" lang="it">
+<html data-app="CSVXpressSmart" data-ver="1.1.0" lang="it">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
@@ -64,8 +64,9 @@
 </header>
 <main><p class="sr-only" id="deviceHint">Su smartphone ogni riga è visualizzata come scheda verticale.</p>
 <section data-zone="upload_csv" id="upload-section">
-<h2>Carica Listino CSV</h2>
-<input accept=".csv" aria-label="Seleziona file CSV" id="csvFileInput" type="file"/>
+<h2>Carica Listino CSV o Excel</h2>
+<input accept=".csv,.xlsx,.xls,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" aria-label="Seleziona file CSV o Excel" id="csvFileInput" type="file"/>
+<p class="muted" id="csvLoadStatus" style="display:none; margin:6px 0; font-size:14px;"></p>
 <p id="csvError" style="color: red; display: none;">Errore nel caricamento del file CSV.</p>
 <!-- ✅ Memoria CSV (IndexedDB via app.js) -->
 <div class="csv-memory" id="csv-memory" style="margin-top:12px;">
@@ -161,6 +162,8 @@
 </main>
 <!-- Librerie necessarie -->
 <script defer="" src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+<!-- SheetJS per import Excel -->
+<script defer="" src="vendor/xlsx.full.min.js"></script>
 <!-- Tracking bridge (GA4 + Clarity) -->
 <script>
     (function () {

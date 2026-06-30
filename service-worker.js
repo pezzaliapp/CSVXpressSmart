@@ -1,7 +1,7 @@
 // service-worker.js
 // CSVXpressSmart — Service Worker
 // Versione: bumpare SEMPRE quando cambiano asset
-const CACHE_VERSION = 'v1.2.1';
+const CACHE_VERSION = 'v1.3.0';
 const CACHE_NAME = `csvxpresssmart-${CACHE_VERSION}`;
 
 // Asset locali da cacheare (app shell)
@@ -14,7 +14,8 @@ const APP_SHELL = [
   './manifest.json',
   './icon/CSVXpressSmart-192.png',
   './icon/CSVXpressSmart-512.png',
-  './icon/CSVXpressSmart-1024.png'
+  './icon/CSVXpressSmart-1024.png',
+  './vendor/xlsx.full.min.js'
 ];
 
 // CDN (cache opportunistica)
