@@ -51,12 +51,62 @@ let autoPopolaCosti = true;
 let mostraDettagliServizi = true;
 
 // -------------------- HELPERS NUMERICI (virgola/decimali) --------------------
+// parseDec(val) -> number
+// Accetta: numeri JS (Excel), stringhe in formato IT/USA/misto.
+//   - EU:  "4.380,00" -> 4380   "60,43" -> 60.43   "1.234.567" -> 1234567
+//   - USA: "4,380.00" -> 4380   "60.43" -> 60.43   "1,234,567" -> 1234567
+//   - IT abbreviato: " 10.850 " -> 10850 (1 separatore + 3 cifre = migliaia)
+//   - "" / null / non valido -> 0
+// Regole: separatori multipli dello stesso tipo = migliaia; con entrambi i
+// tipi l'ULTIMO è il decimale; con un solo separatore + 3 cifre dopo = migliaia.
 function parseDec(val) {
-  // accetta: "60,43" / "60.43" / "  60,43  " / "" -> 0
-  const s = String(val ?? '')
-    .trim()
-    .replace(/\s+/g, '')
-    .replace(',', '.');
+  // Se è già un numero (es. da Excel/SheetJS), restituiscilo direttamente
+  if (typeof val === 'number') return Number.isFinite(val) ? val : 0;
+
+  let s = String(val ?? '').trim().replace(/\s+/g, '');
+  if (!s) return 0;
+
+  const commaCount = (s.match(/,/g) || []).length;
+  const dotCount = (s.match(/\./g) || []).length;
+
+  if (commaCount === 0 && dotCount === 0) {
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  // Multipli separatori dello stesso tipo: sono separatori migliaia
+  if (commaCount > 1 && dotCount === 0) {
+    // Es. "1,234,567" formato USA senza decimali
+    s = s.replace(/,/g, '');
+  } else if (dotCount > 1 && commaCount === 0) {
+    // Es. "1.234.567" formato IT senza decimali
+    s = s.replace(/\./g, '');
+  } else if (commaCount >= 1 && dotCount >= 1) {
+    // Entrambi presenti: l'ULTIMO separatore è il decimale, gli altri migliaia
+    const lastComma = s.lastIndexOf(',');
+    const lastDot = s.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      // Es. "4.380,00" → "4380.00"
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      // Es. "4,380.00" → "4380.00"
+      s = s.replace(/,/g, '');
+    }
+  } else {
+    // UN solo separatore: ambiguo. Euristica:
+    // - "10.850" (3 cifre dopo) → migliaia, formato italiano abbreviato
+    // - "60.43" / "60,43" / "1.5" → decimale
+    const sep = commaCount > 0 ? ',' : '.';
+    const parts = s.split(sep);
+    if (parts.length === 2 && parts[1].length === 3 && /^\d+$/.test(parts[1])) {
+      // 3 cifre dopo separatore = migliaia (convenzione internazionale)
+      s = s.replace(sep, '');
+    } else {
+      // Decimale: normalizza a punto
+      if (sep === ',') s = s.replace(',', '.');
+    }
+  }
+
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : 0;
 }
