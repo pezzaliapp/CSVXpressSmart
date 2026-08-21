@@ -1,2 +1,7 @@
 # Documento operativo di lavoro (brief Claude Code) — non fa parte dell'app
 BRIEF.md
+
+# Pacchetto di pubblicazione (rigenerabile, non va versionato)
+CSVXpressSmart-Cloudflare-Ready.zip
+
+.DS_Store

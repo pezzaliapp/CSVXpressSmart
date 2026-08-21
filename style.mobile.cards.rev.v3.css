@@ -38,6 +38,16 @@
     display: block;
   }
 
+  /* ✅ FIX: in modalità "card" le larghezze fisse per colonna della vista
+     tabella (es. descrizione 330px) non devono più valere, altrimenti la
+     scheda diventa più larga dello schermo e il contenuto viene tagliato. */
+  #articoli-table th,
+  #articoli-table td{
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
   #articoli-table tr{
     display: block;
     background: #fff;
@@ -194,4 +204,51 @@
     width: clamp(140px, 58vw, 215px) !important;
   }
 }
+
+/* --- V4: i campi si ADATTANO allo spazio della card ---
+   Le larghezze fisse (clamp in vw) non potevano restringersi e su schermi
+   da ~360px facevano uscire la scheda dallo schermo: ora l'input occupa
+   lo spazio che resta dopo l'etichetta, senza mai sfondare. */
+@media (max-width: 720px){
+  #articoli-table td input,
+  #articoli-table td select{
+    flex: 1 1 auto;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 230px !important;
+  }
+}
+
+/* --- V4: schermi strettissimi (Galaxy Fold chiuso ~280px, display split) ---
+   Sotto i 340px etichetta e valore vanno su due righe: così nessun campo
+   può uscire dalla card (che ha overflow:hidden) e resta tutto toccabile. */
+@media (max-width: 340px){
+  #articoli-table td{
+    display: block !important;
+    padding: 8px 4px;
+  }
+
+  #articoli-table td::before{
+    display: block;
+    flex: none !important;
+    flex-basis: auto !important;
+    margin-bottom: 4px;
+  }
+
+  #articoli-table td input,
+  #articoli-table td select{
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 44px;
+  }
+
+  #articoli-table td[data-col="azioni"] button{
+    width: 100%;
+  }
+
+  #articoli-table tr{
+    padding: 8px 8px 4px;
+  }
+}
+
 

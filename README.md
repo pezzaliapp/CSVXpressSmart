@@ -11,7 +11,36 @@ PWA per agenti di vendita: calcola sconti commerciali (Sconto 1, Sconto 2, scont
 - Memoria locale (IndexedDB): l'ultimo listino caricato resta disponibile
 - Export report TXT e WhatsApp
 - **Offline-first**: funziona senza connessione dopo il primo caricamento
-- **Privacy first**: nessun account, nessun tracker invasivo. I dati restano sul dispositivo
+- **Privacy first**: nessun account, nessun tracker, nessuna telemetria, nessuna richiesta
+  a servizi esterni. Listini e preventivi restano sul dispositivo
+
+## Pubblicazione su Cloudflare Pages
+
+PWA completamente statica: nessun build, nessun npm, nessun Worker o Function.
+
+1. Genera/usa `CSVXpressSmart-Cloudflare-Ready.zip` (index.html alla radice dello ZIP)
+2. Cloudflare Pages → Create project → **Direct Upload** → trascina lo ZIP
+
+Il file `_headers` applica CSP, header di sicurezza e le regole di cache
+(`service-worker.js` e `index.html` sempre rivalidati, `vendor/` e `icon/` a cache lunga).
+
+Ad ogni nuova pubblicazione ricordarsi di:
+1. incrementare `CACHE_VERSION` in `service-worker.js`
+2. incrementare `data-ver` in `index.html`
+
+Così il service worker installa la nuova shell, elimina le cache vecchie e la pagina
+si aggiorna da sola.
+
+## Test
+
+Richiedono Google Chrome installato e un server statico locale:
+
+```bash
+python3 -m http.server 8899 --bind 127.0.0.1   # oppure: node tests/serve-with-headers.mjs 8898
+node tests/logic.test.js       # calcoli, report, export, parsing
+node tests/browser.test.mjs    # end-to-end in Chrome headless (import, TXT, offline, responsive)
+node tests/update.test.mjs     # aggiornamento PWA e pulizia cache
+```
 
 ## App nativa iOS
 

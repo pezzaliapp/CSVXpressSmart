@@ -1,7 +1,8 @@
 // service-worker.js
 // CSVXpressSmart — Service Worker
-// Versione: bumpare SEMPRE quando cambiano asset
-const CACHE_VERSION = 'v1.3.0';
+// PWA statica: nessuna richiesta a servizi esterni, tutto same-origin.
+// Versione: bumpare SEMPRE quando cambiano gli asset.
+const CACHE_VERSION = 'v1.4.0';
 const CACHE_NAME = `csvxpresssmart-${CACHE_VERSION}`;
 
 // Asset locali da cacheare (app shell)
@@ -9,29 +10,37 @@ const APP_SHELL = [
   './',
   './index.html',
   './style.css',
-  './style.mobile.cards.rev.v3.css',   // ✅ nuovo CSS mobile
+  './style.mobile.cards.rev.v3.css',
   './app.js',
   './manifest.json',
   './icon/CSVXpressSmart-192.png',
   './icon/CSVXpressSmart-512.png',
   './icon/CSVXpressSmart-1024.png',
+  './vendor/papaparse.min.js',
   './vendor/xlsx.full.min.js'
-];
-
-// CDN (cache opportunistica)
-const CDN_ASSETS = [
-  'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
 ];
 
 /* =========================
    INSTALL
    ========================= */
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))
-  );
-  self.skipWaiting();
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+
+    // addAll() fallirebbe TUTTO se un singolo file mancasse: qui ogni asset
+    // viene messo in cache singolarmente, così l'installazione non si blocca.
+    await Promise.all(APP_SHELL.map(async (url) => {
+      try {
+        const res = await fetch(url, { cache: 'reload' });
+        if (res && res.ok) await cache.put(url, res.clone());
+        else console.warn('[SW] asset non cacheato:', url, res && res.status);
+      } catch (err) {
+        console.warn('[SW] asset non raggiungibile:', url, err);
+      }
+    }));
+
+    await self.skipWaiting();
+  })());
 });
 
 /* =========================
@@ -39,6 +48,7 @@ self.addEventListener('install', event => {
    ========================= */
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
+    // elimina tutte le cache delle versioni precedenti
     const names = await caches.keys();
     await Promise.all(
       names
@@ -46,9 +56,8 @@ self.addEventListener('activate', event => {
         .map(name => caches.delete(name))
     );
 
-    // opzionale ma utile
-    if ('navigationPreload' in self.registration) {
-      try { await self.registration.navigationPreload.enable(); } catch(e) {}
+    if (self.registration.navigationPreload) {
+      try { await self.registration.navigationPreload.enable(); } catch (_) {}
     }
 
     await self.clients.claim();
@@ -62,79 +71,101 @@ self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
-  const url = new URL(req.url);
+  let url;
+  try { url = new URL(req.url); } catch (_) { return; }
 
-  // ✅ NAVIGAZIONI / HTML: network-first (per prendere sempre l'index aggiornato)
+  // Ignora tutto ciò che non è http/https (es. estensioni del browser)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
+  // NAVIGAZIONI / HTML: network-first, così un aggiornamento pubblicato
+  // viene visto subito; offline si ricade sull'index in cache.
   if (req.mode === 'navigate' || req.destination === 'document') {
-    event.respondWith(networkFirst(req, './index.html'));
+    event.respondWith(navigationHandler(event));
     return;
   }
 
-  /* ---------- CDN: network-first ---------- */
-  if (CDN_ASSETS.some(cdn => req.url.startsWith(cdn))) {
-    event.respondWith(networkFirst(req));
-    return;
-  }
-
-  /* ---------- Same-origin asset: cache-first ---------- */
+  // Asset same-origin: cache-first (la cache è versionata, niente stallo)
   if (url.origin === self.location.origin) {
     event.respondWith(cacheFirst(req));
     return;
   }
 
-  /* ---------- Fallback ---------- */
-  event.respondWith(fetch(req).catch(() => caches.match('./index.html')));
+  // Qualsiasi altra origine: passa alla rete, senza cache e senza fallback.
+  // (L'app non dipende da risorse esterne.)
 });
 
 /* =========================
    STRATEGIE
    ========================= */
+function cacheable(response) {
+  return response && response.ok && response.type === 'basic';
+}
+
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
 
-  const response = await fetch(request);
-  const cache = await caches.open(CACHE_NAME);
-  cache.put(request, response.clone());
-  return response;
-}
-
-async function networkFirst(request, fallbackUrl) {
-  const cache = await caches.open(CACHE_NAME);
-
-  // navigation preload (se disponibile)
-  const preload = await eventPreloadResponse();
-  if (preload) {
-    cache.put(request, preload.clone());
-    return preload;
-  }
-
   try {
     const response = await fetch(request);
-    cache.put(request, response.clone());
+    if (cacheable(response)) {
+      const cache = await caches.open(CACHE_NAME);
+      // clone PRIMA di restituire: il body si consuma una volta sola
+      cache.put(request, response.clone()).catch(() => {});
+    }
     return response;
   } catch (err) {
-    const cached = await cache.match(request);
-    if (cached) return cached;
-    if (fallbackUrl) {
-      const fb = await caches.match(fallbackUrl);
-      if (fb) return fb;
-    }
+    // offline e non in cache: fallback all'app shell per le richieste HTML
+    const fallback = await caches.match('./index.html');
+    if (fallback && request.destination === 'document') return fallback;
     throw err;
   }
 }
 
-// helper: navigation preload response (se presente)
-function eventPreloadResponse() {
-  // in alcuni browser event.preloadResponse esiste solo dentro fetch handler
-  // quindi qui restituiamo null sempre: è safe. (manteniamo compatibilità)
-  return Promise.resolve(null);
+async function navigationHandler(event) {
+  const request = event.request;
+  const cache = await caches.open(CACHE_NAME);
+
+  // navigation preload: se il browser ha già avviato la richiesta, la si usa
+  try {
+    const preload = await event.preloadResponse;
+    if (preload) {
+      if (cacheable(preload)) cache.put('./index.html', preload.clone()).catch(() => {});
+      return preload;
+    }
+  } catch (_) { /* preload non disponibile o fallito: si prosegue con fetch */ }
+
+  try {
+    const response = await fetch(request);
+    if (cacheable(response)) cache.put('./index.html', response.clone()).catch(() => {});
+    return response;
+  } catch (_) {
+    const cached = await cache.match('./index.html') || await caches.match('./index.html');
+    if (cached) return cached;
+
+    return new Response(
+      '<!doctype html><meta charset="utf-8"><title>CSVXpressSmart</title>' +
+      '<p style="font-family:Arial,sans-serif;padding:2em">App non disponibile offline: ' +
+      'apri CSVXpressSmart una volta con la connessione attiva.</p>',
+      { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    );
+  }
 }
 
-
-// Permette alla pagina di forzare l'attivazione del nuovo SW
+/* =========================
+   MESSAGGI DALLA PAGINA
+   ========================= */
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
+  const data = event.data;
+  if (!data) return;
+
+  // attivazione immediata del nuovo SW
+  if (data.type === 'SKIP_WAITING') self.skipWaiting();
+
+  // svuota completamente le cache (utile per reset manuale)
+  if (data.type === 'CLEAR_CACHES') {
+    event.waitUntil((async () => {
+      const names = await caches.keys();
+      await Promise.all(names.map(n => caches.delete(n)));
+    })());
   }
 });

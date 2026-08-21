@@ -1,14 +1,15 @@
 <!DOCTYPE html>
 
-<html data-app="CSVXpressSmart" data-ver="1.1.0" lang="it">
+<html data-app="CSVXpressSmart" data-ver="1.2.0" lang="it">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <title>CSVXpressSmart</title>
+  <meta name="description" content="Preventivi e ordini rapidi da listini CSV o Excel. Sconti, margini, trasporto e installazione. Tutti i dati restano sul dispositivo."/>
 
   <!-- PWA -->
   <link rel="manifest" href="manifest.json"/>
-  <meta name="theme-color" content="#ffffff"/>
+  <meta name="theme-color" content="#2196f3"/>
 
   <!-- Styles -->
   <link rel="stylesheet" href="style.css"/>
@@ -38,7 +39,7 @@
     }
   </style>
 
-<meta content="yes" name="apple-mobile-web-app-capable"/><meta content="default" name="apple-mobile-web-app-status-bar-style"/><meta content="telephone=no" name="format-detection"/><link href="icon/CSVXpressSmart-1024.png" rel="apple-touch-icon"/><meta content="#0b0f14" media="(prefers-color-scheme: dark)" name="theme-color"/></head>
+<meta content="yes" name="apple-mobile-web-app-capable"/><meta content="yes" name="mobile-web-app-capable"/><meta content="default" name="apple-mobile-web-app-status-bar-style"/><meta content="CSVXpressSmart" name="apple-mobile-web-app-title"/><meta content="telephone=no" name="format-detection"/><link href="icon/CSVXpressSmart-1024.png" rel="apple-touch-icon"/><link href="icon/CSVXpressSmart-192.png" rel="icon" sizes="192x192" type="image/png"/><link href="icon/CSVXpressSmart-512.png" rel="icon" sizes="512x512" type="image/png"/></head>
 <body>
 <header data-zone="header">
 <div class="logo-container">
@@ -49,7 +50,7 @@
 <main><p class="sr-only" id="deviceHint">Su smartphone ogni riga è visualizzata come scheda verticale.</p>
 <section data-zone="upload_csv" id="upload-section">
 <h2>Carica Listino CSV o Excel</h2>
-<input accept=".csv,.xlsx,.xls,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" aria-label="Seleziona file CSV o Excel" id="csvFileInput" type="file"/>
+<input accept=".csv,.txt,.xlsx,.xlsm,.xls,text/csv,text/plain,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12" aria-label="Seleziona file CSV o Excel" id="csvFileInput" type="file"/>
 <p class="muted" id="csvLoadStatus" style="display:none; margin:6px 0; font-size:14px;"></p>
 <p id="csvError" style="color: red; display: none;">Errore nel caricamento del file CSV.</p>
 <!-- ✅ Memoria CSV (IndexedDB via app.js) -->
@@ -144,64 +145,17 @@
 <div class="report-preview" id="reportPreview" style="margin-top:14px; display:none;"></div>
 </section>
 </main>
-<!-- Librerie necessarie -->
-<script defer="" src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+<!-- Librerie necessarie — servite localmente: nessuna richiesta a servizi esterni -->
+<!-- PapaParse 5.3.2 (MIT) per CSV -->
+<script defer="" src="vendor/papaparse.min.js"></script>
 <!-- SheetJS per import Excel -->
 <script defer="" src="vendor/xlsx.full.min.js"></script>
-<!-- Tracking bridge (GA4 + Clarity) -->
-<script>
-    (function () {
-      const APP = document.documentElement.getAttribute('data-app') || 'CSVXpressSmart';
-      const VER = document.documentElement.getAttribute('data-ver') || 'dev';
-
-      function safeGtag(eventName, params) {
-        try { if (typeof window.gtag === 'function') window.gtag('event', eventName, params); } catch (_) {}
-      }
-      function safeClarity(eventName, params) {
-        try {
-          if (typeof window.clarity === 'function') {
-            window.clarity('event', eventName);
-            if (params && typeof params === 'object') {
-              for (const [k, v] of Object.entries(params)) {
-                window.clarity('set', `${eventName}_${k}`, String(v));
-              }
-            }
-          }
-        } catch (_) {}
-      }
-      function fpFromFile(file) {
-        if (!file) return undefined;
-        return `${file.name}|${file.size}|${file.lastModified}`;
-      }
-      function send(eventName, params = {}) {
-        const payload = { app: APP, ver: VER, page: location.pathname, ...params };
-        safeGtag(eventName, payload);
-        safeClarity(eventName, payload);
-      }
-
-      window.track = {
-        zone_view: (zone) => send('zone_view', { zone }),
-        csv_upload_start: ({ method } = {}) => send('csv_upload_start', { method }),
-        csv_upload_ok: ({ method, file } = {}) =>
-          send('csv_upload_ok', { method, file_name: file?.name, file_size: file?.size, fp: fpFromFile(file) }),
-        csv_parse_ok: ({ rows, cols, ms } = {}) => send('csv_parse_ok', { rows, cols, parse_ms: ms }),
-        csv_parse_error: ({ code, ms } = {}) => send('csv_parse_error', { error_code: code || 'parse_error', parse_ms: ms }),
-        csv_export: ({ format } = {}) => send('csv_export', { format: format || 'txt' }),
-        report_whatsapp: ({ variant } = {}) => send('report_whatsapp', { variant: variant || 'standard' }),
-        add_item_listino: () => send('add_item_listino', {}),
-        add_item_manual: () => send('add_item_manual', {}),
-        remove_item: () => send('remove_item', {}),
-        smart_toggle: ({ key, val } = {}) => send('smart_toggle', { key, val })
-      };
-
-      window.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('[data-zone]').forEach(el => {
-          const z = el.getAttribute('data-zone');
-          if (z) window.track.zone_view(z);
-        });
-      });
-    })();
-  </script>
+<!-- Nessun analytics, nessun tracker, nessuna telemetria. -->
+<noscript>
+<p style="padding:1em;color:#b71c1c">
+      CSVXpressSmart richiede JavaScript attivo. Tutti i calcoli avvengono nel browser, sul tuo dispositivo.
+    </p>
+</noscript>
 <!-- App -->
 <script defer="" src="app.js"></script>
 </body>

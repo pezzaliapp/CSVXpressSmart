@@ -16,19 +16,36 @@
 
 *{ box-sizing:border-box; }
 
+html{
+  /* niente scorrimento orizzontale della pagina: la tabella ha il suo contenitore */
+  overflow-x: hidden;
+}
+
 body{
   font-family: Arial, sans-serif;
   margin: 0;
   padding: 0;
   background-color: var(--bg);
   color: var(--text);
+  overflow-x: hidden;
+  /* viewport-fit=cover: rispetta notch e barra gesti (Android/iOS) */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 header{
   background-color: var(--brand);
   color: #fff;
   padding: 1em;
+  padding-top: calc(1em + env(safe-area-inset-top));
   text-align: center;
+}
+
+header h1{
+  font-size: clamp(18px, 5vw, 28px);
+  margin: 0;
+  word-break: break-word;
 }
 
 .logo-container{
@@ -286,10 +303,43 @@ button:active{ transform: translateY(1px); }
 }
 
 /* =========================
+   Report / azioni
+   ========================= */
+.report-actions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.report-actions button{
+  flex: 1 1 210px;
+  margin: 0;
+  min-height: 44px;      /* target touch comodo */
+  max-width: none;
+}
+
+.report-preview{
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfbfb;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  max-height: 50vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overflow-wrap: anywhere;
+}
+
+/* =========================
    Utility
    ========================= */
 .col-hidden{ display: none !important; }
 .muted{ color: var(--muted); }
+
+/* Immagini/embed: mai fuori dallo schermo */
+img{ max-width: 100%; height: auto; }
 
 /* Mobile */
 @media (max-width: 720px){
@@ -300,6 +350,34 @@ button:active{ transform: translateY(1px); }
   select,
   button{ max-width: 100%; }
 
-  /* su mobile mantieni comunque scorrimento */
+  /* target touch + niente zoom automatico sui campi (Android/iOS) */
+  input[type="text"],
+  input[type="number"],
+  select,
+  button{
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  input[type="file"]{ font-size: 15px; }
+
+  input[type="checkbox"]{
+    width: 20px;
+    height: 20px;
+    min-height: 0;
+    flex: 0 0 auto;
+  }
+
+  /* su mobile la tabella diventa "cards" (style.mobile.cards.rev.v3.css):
+     il min-width qui sotto resta solo come fallback se quel CSS non carica */
   #articoli-table{ min-width: 980px; }
+
+  .report-actions button{ flex: 1 1 100%; }
+}
+
+/* Schermi molto stretti (es. Galaxy Fold chiuso, ~280px) */
+@media (max-width: 400px){
+  main{ padding: 10px; }
+  .logo{ height: 32px; width: 32px; }
+  .smart-controls{ padding: 10px; }
 }

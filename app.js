@@ -8,17 +8,52 @@
 // - registra con cache-bust (?v=...)
 // - check update ad ogni apertura
 // - attiva subito la nuova versione (skipWaiting via message)
-// - reload automatico quando cambia controller (una sola volta)
+// - ricarica automaticamente quando il nuovo SW prende il controllo
 if ('serviceWorker' in navigator) {
+  // true solo se la pagina è GIÀ controllata: al primissimo avvio non serve reload
+  const HAD_CONTROLLER = !!navigator.serviceWorker.controller;
+  let swReloading = false;
+
+  // Ricarica per usare subito i nuovi asset:
+  // - prima installazione (pagina non controllata): nessun reload a sorpresa;
+  // - un solo reload per istanza di pagina;
+  // - anti-loop: al massimo un reload automatico ogni 10 secondi.
+  function onSwControllerChange() {
+    if (!HAD_CONTROLLER || swReloading) return;
+
+    try {
+      const last = Number(sessionStorage.getItem('sw_reload_at') || 0);
+      if (Date.now() - last < 10000) return;
+      sessionStorage.setItem('sw_reload_at', String(Date.now()));
+    } catch (_) { /* storage non disponibile: si procede comunque */ }
+
+    swReloading = true;
+
+    // Ricaricare nell'istante esatto del cambio controller fa ripartire la
+    // pagina SENZA service worker (registrazione ancora in assestamento):
+    // l'app resterebbe senza offline e potrebbe pescare asset dalla cache HTTP.
+    // Si attende che la registrazione sia pronta, poi si ricarica.
+    const ricarica = () => window.location.reload();
+    navigator.serviceWorker.ready.then(() => setTimeout(ricarica, 250)).catch(ricarica);
+  }
+
+  // IMPORTANTE: in ascolto PRIMA di registrare. Un SW nuovo con skipWaiting
+  // può prendere il controllo mentre register()/update() sono ancora in corso:
+  // agganciando l'evento dopo, l'aggiornamento passerebbe inosservato e
+  // l'utente resterebbe su CSS/JS vecchi fino al riavvio successivo.
+  navigator.serviceWorker.addEventListener('controllerchange', onSwControllerChange);
+
   window.addEventListener('load', async () => {
     const VER = document.documentElement.getAttribute('data-ver') || 'dev';
     const SW_URL = `service-worker.js?v=${encodeURIComponent(VER)}`;
 
     try {
       const reg = await navigator.serviceWorker.register(SW_URL);
-      console.log('Service Worker registrato', reg);
 
-      try { await reg.update(); } catch (_) {}
+      // SW già in attesa (installato ma non attivo) -> sbloccalo subito
+      if (reg.waiting) {
+        try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (_) {}
+      }
 
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
@@ -31,14 +66,10 @@ if ('serviceWorker' in navigator) {
         });
       });
 
-      // quando il nuovo SW prende controllo -> ricarica 1 volta
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (sessionStorage.getItem('sw_reloaded')) return;
-        sessionStorage.setItem('sw_reloaded', '1');
-        window.location.reload();
-      });
+      try { await reg.update(); } catch (_) {}
     } catch (err) {
-      console.error('Service Worker non registrato', err);
+      // Nessun SW = app comunque funzionante (solo senza offline)
+      console.warn('Service Worker non registrato', err);
     }
   });
 }
@@ -138,21 +169,136 @@ function sanitizeDecimalTyping(str) {
   return s;
 }
 
+// -------------------- SICUREZZA OUTPUT --------------------
+// I dati arrivano da CSV/Excel dell'utente: vanno inseriti come testo, mai come HTML.
+function escapeHtml(val) {
+  return String(val ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// -------------------- EXPORT FILE (Android-safe) --------------------
+// Scarica un file di testo funzionando su Chrome Android, Samsung Internet,
+// Firefox Android, iOS Safari e desktop.
+// Note importanti:
+//  - l'Object URL NON va revocato subito: su Android il download parte in modo
+//    asincrono e revocare troppo presto lo annulla (file vuoto / "download fallito");
+//  - il bridge nativo window.Android è OPZIONALE: se manca si usa il browser.
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+
+  // 1) Bridge app nativa (facoltativo, mai obbligatorio per il web)
+  try {
+    const bridge = window.Android;
+    if (bridge) {
+      if (typeof bridge.saveTextFile === 'function') { bridge.saveTextFile(filename, text); return true; }
+      if (typeof bridge.saveFile === 'function') { bridge.saveFile(filename, text); return true; }
+    }
+  } catch (_) { /* bridge assente o non compatibile: si prosegue col browser */ }
+
+  // 2) Percorso standard browser: <a download> + Object URL
+  const supportsDownload = typeof document.createElement('a').download !== 'undefined';
+  if (supportsDownload) {
+    try {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.rel = 'noopener';
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+
+      // Pulizia ritardata: il download deve avere il tempo di partire
+      setTimeout(() => {
+        try { link.remove(); } catch (_) {}
+        try { URL.revokeObjectURL(url); } catch (_) {}
+      }, 60000);
+
+      return true;
+    } catch (err) {
+      console.warn('Download via <a download> non riuscito, provo il fallback:', err);
+    }
+  }
+
+  // 3) Fallback: apri il contenuto in una nuova scheda (l'utente salva/condivide)
+  try {
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (!win) window.location.href = url;
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 60000);
+    return true;
+  } catch (err) {
+    console.error('Impossibile generare il file:', err);
+    alert('Impossibile generare il file su questo browser. Il report resta visibile qui sotto: puoi selezionarlo e copiarlo.');
+    return false;
+  }
+}
+
+// Mostra il report generato in pagina (utile su Android dove il download è silenzioso)
+function mostraAnteprimaReport(text) {
+  const el = document.getElementById('reportPreview');
+  if (!el) return;
+  el.textContent = text;
+  el.style.display = 'block';
+}
+
+// -------------------- WHATSAPP (Android-safe) --------------------
+function apriWhatsAppConTesto(testo) {
+  // wa.me è l'endpoint ufficiale: su Android apre direttamente l'app WhatsApp
+  const url = 'https://wa.me/?text=' + encodeURIComponent(testo);
+
+  try {
+    const win = window.open(url, '_blank', 'noopener');
+    // popup bloccato (frequente in PWA standalone): naviga nella stessa scheda
+    if (!win || win.closed || typeof win.closed === 'undefined') {
+      window.location.href = url;
+    }
+  } catch (_) {
+    window.location.href = url;
+  }
+}
+
 // -------------------- CSV MEMORY (IndexedDB) --------------------
 const CSV_DB_NAME = 'csvxpresssmart_db_v1';
 const CSV_STORE = 'kv';
 const CSV_KEY = 'last_csv_payload';
+const CSV_REMEMBER_KEY = 'csvxpresssmart_remember_csv_v1';
+
+// Connessione riusata (evita di aprire una connessione IndexedDB per ogni operazione)
+let csvDbPromise = null;
 
 function openCsvDB() {
-  return new Promise((resolve, reject) => {
+  if (csvDbPromise) return csvDbPromise;
+
+  csvDbPromise = new Promise((resolve, reject) => {
+    if (!('indexedDB' in window) || !window.indexedDB) {
+      reject(new Error('IndexedDB non disponibile'));
+      return;
+    }
     const req = indexedDB.open(CSV_DB_NAME, 1);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(CSV_STORE)) db.createObjectStore(CSV_STORE);
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // se il DB viene chiuso/aggiornato altrove, la prossima apertura riparte pulita
+      db.onclose = () => { csvDbPromise = null; };
+      db.onversionchange = () => { try { db.close(); } catch (_) {} csvDbPromise = null; };
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
+    req.onblocked = () => reject(new Error('IndexedDB bloccato'));
   });
+
+  // in caso di errore (es. modalità privata) permetti un nuovo tentativo
+  csvDbPromise.catch(() => { csvDbPromise = null; });
+
+  return csvDbPromise;
 }
 
 async function idbSet(key, value) {
@@ -250,6 +396,26 @@ async function tryAutoLoadSavedCsvOnStart() {
 function bindCsvMemoryUI() {
   const btnLoad = document.getElementById('btnLoadSavedCSV');
   const btnClear = document.getElementById('btnClearSavedCSV');
+  const chkRemember = document.getElementById('toggleRememberCSV');
+
+  // La preferenza "ricorda listino" ora sopravvive alla chiusura dell'app
+  if (chkRemember) {
+    try {
+      const saved = localStorage.getItem(CSV_REMEMBER_KEY);
+      if (saved !== null) chkRemember.checked = (saved === '1');
+    } catch (_) {}
+
+    chkRemember.addEventListener('change', async () => {
+      try { localStorage.setItem(CSV_REMEMBER_KEY, chkRemember.checked ? '1' : '0'); } catch (_) {}
+
+      if (!chkRemember.checked) {
+        // privacy: se l'utente disattiva la memoria, il listino salvato viene rimosso subito
+        await clearLastCsvPayload();
+      } else if (listino.length) {
+        await saveLastCsvPayload({ listinoRows: listino, meta: { name: 'listino in uso' } });
+      }
+    });
+  }
 
   if (btnLoad) {
     btnLoad.addEventListener('click', async () => {
@@ -489,8 +655,11 @@ document.addEventListener("DOMContentLoaded", function () {
   bindCsvMemoryUI();
   tryAutoLoadSavedCsvOnStart();
 
-  document.getElementById("csvFileInput").addEventListener("change", handleCSVUpload);
-  document.getElementById("searchListino").addEventListener("input", aggiornaListinoSelect);
+  const fileInput = document.getElementById("csvFileInput");
+  if (fileInput) fileInput.addEventListener("change", handleCSVUpload);
+
+  const searchInput = document.getElementById("searchListino");
+  if (searchInput) searchInput.addEventListener("input", aggiornaListinoSelect);
 
   // Checkboxes (già presenti)
   const checkbox1 = document.createElement("label");
@@ -555,15 +724,17 @@ function bindSmartControls() {
     smartSettings.hideDiscounts = !!elHideDiscounts?.checked;
     smartSettings.showClientDiscount = !!elShowClientDiscount?.checked;
 
-    // Se smart attivo: forza alcune scelte
+    // Se smart attivo: forza alcune scelte (e allinea le checkbox a video)
     if (smartSettings.smartMode) {
       smartSettings.hideVenduto = true;
       smartSettings.hideDiff = true;
       smartSettings.hideDiscounts = true;
+      if (elHideVenduto) elHideVenduto.checked = true;
+      if (elHideDiff) elHideDiff.checked = true;
+      if (elHideDiscounts) elHideDiscounts.checked = true;
     }
 
     saveSmartSettings();
-    window.track?.smart_toggle?.({ key: 'settings', val: JSON.stringify(smartSettings) });
 
     // Se cambia la modalità sconto cliente -> switch completo (mantiene invariato prezzo finale)
     if (prevClient !== !!smartSettings.showClientDiscount) {
@@ -629,41 +800,82 @@ function togglePopolaCosti() {
 
 // -------------------- CSV UPLOAD --------------------
 function handleCSVUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+  const input = event.target;
+  const file = input.files && input.files[0];
+
+  // reset immediato: permette di riselezionare lo STESSO file una seconda volta
+  // (su Android senza questo reset il secondo tentativo non genera l'evento change)
+  const resetInput = () => { try { input.value = ''; } catch (_) {} };
+
+  if (!file) { resetInput(); return; }
+
+  hideCsvError();
 
   const fileName = (file.name || "").toLowerCase();
-  const isExcel = /\.(xlsx|xlsm|xls)$/i.test(fileName);
 
-  window.track?.csv_upload_start?.({ method: 'file_input' });
-  window.track?.csv_upload_ok?.({ method: 'file_input', file });
-
-  if (isExcel) {
+  if (/\.(xlsx|xlsm|xls)$/.test(fileName)) {
     parseExcelFile(file);
-  } else {
-    parseCsvFile(file);
+    resetInput();
+    return;
   }
+
+  if (/\.(csv|txt|tsv)$/.test(fileName)) {
+    parseCsvFile(file);
+    resetInput();
+    return;
+  }
+
+  // Nome senza estensione riconoscibile: succede con alcuni picker Android
+  // (Google Drive, Documenti, allegati). Si riconosce il formato dai primi byte.
+  sniffAndParse(file);
+  resetInput();
+}
+
+// Riconoscimento formato dai magic bytes:
+//  - "PK"   (50 4B)             -> xlsx / xlsm (contenitore ZIP)
+//  - OLE2   (D0 CF 11 E0)       -> xls (Excel 97-2003)
+//  - altro                      -> trattato come testo/CSV
+function sniffAndParse(file) {
+  let reader;
+  try { reader = new FileReader(); } catch (_) { parseCsvFile(file); return; }
+
+  reader.onload = (e) => {
+    try {
+      const b = new Uint8Array(e.target.result || new ArrayBuffer(0));
+      const isZip = b[0] === 0x50 && b[1] === 0x4B;
+      const isOle = b[0] === 0xD0 && b[1] === 0xCF && b[2] === 0x11 && b[3] === 0xE0;
+      if (isZip || isOle) parseExcelFile(file);
+      else parseCsvFile(file);
+    } catch (_) {
+      parseCsvFile(file);
+    }
+  };
+  reader.onerror = () => parseCsvFile(file);
+
+  try { reader.readAsArrayBuffer(file.slice(0, 8)); }
+  catch (_) { parseCsvFile(file); }
 }
 
 function parseCsvFile(file) {
-  const t0 = performance.now();
+  if (typeof Papa === 'undefined') {
+    console.error("PapaParse non caricato");
+    showCsvError("Libreria CSV non disponibile. Ricarica la pagina.");
+    return;
+  }
+
   Papa.parse(file, {
     header: true,
     skipEmptyLines: true,
     complete: function(results) {
-      const ms = Math.round(performance.now() - t0);
       if (!results.data.length) {
-        showCsvError();
-        window.track?.csv_parse_error?.({ code: 'empty_or_no_rows', ms });
+        showCsvError("Il file non contiene righe leggibili.");
         return;
       }
-      finalizeListino(results.data, file, ms, Array.isArray(results.meta?.fields) ? results.meta.fields.length : undefined);
+      finalizeListino(results.data, file);
     },
     error: function(err) {
-      const ms = Math.round(performance.now() - t0);
       console.error("Errore CSV:", err);
       showCsvError();
-      window.track?.csv_parse_error?.({ code: 'papaparse_error', ms });
     }
   });
 }
@@ -672,11 +884,9 @@ function parseExcelFile(file) {
   if (typeof XLSX === 'undefined') {
     console.error("SheetJS non caricato");
     showCsvError("Libreria Excel non disponibile. Ricarica la pagina.");
-    window.track?.csv_parse_error?.({ code: 'xlsx_not_loaded', ms: 0 });
     return;
   }
 
-  const t0 = performance.now();
   const reader = new FileReader();
 
   reader.onload = function(e) {
@@ -686,57 +896,56 @@ function parseExcelFile(file) {
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
       const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "", blankrows: false });
-      const ms = Math.round(performance.now() - t0);
 
       if (!rows.length) {
         showCsvError("Il file Excel non contiene righe valide.");
-        window.track?.csv_parse_error?.({ code: 'excel_empty', ms });
         return;
       }
 
-      const cols = rows[0] ? Object.keys(rows[0]).length : undefined;
-      finalizeListino(rows, file, ms, cols);
+      finalizeListino(rows, file);
     } catch (err) {
-      const ms = Math.round(performance.now() - t0);
       console.error("Errore parsing Excel:", err);
       showCsvError("Errore nel caricamento del file Excel.");
-      window.track?.csv_parse_error?.({ code: 'excel_parse_error', ms });
     }
   };
 
   reader.onerror = function() {
-    const ms = Math.round(performance.now() - t0);
     console.error("Errore lettura file Excel");
     showCsvError("Impossibile leggere il file.");
-    window.track?.csv_parse_error?.({ code: 'excel_read_error', ms });
   };
 
   reader.readAsArrayBuffer(file);
 }
 
-function finalizeListino(rawRows, file, ms, cols) {
+function finalizeListino(rawRows, file) {
   listino = normalizeListino(rawRows);
+
+  const loaded = listino.length;
+  const ignored = rawRows.length - loaded;
+
+  if (!loaded) {
+    updateCsvLoadStatus(0, ignored);
+    showCsvError("Nessun articolo valido: servono almeno le colonne “Codice” e “Prezzo”.");
+    aggiornaListinoSelect();
+    return;
+  }
 
   saveLastCsvPayload({
     listinoRows: listino,
     meta: { name: file.name, size: file.size, lastModified: file.lastModified, fp: csvFingerprintFromFile(file) }
   });
 
-  const loaded = listino.length;
-  const total = rawRows.length;
-  const ignored = total - loaded;
-
-  window.track?.csv_parse_ok?.({ rows: loaded, cols, ms });
-
   hideCsvError();
   updateCsvLoadStatus(loaded, ignored);
   aggiornaListinoSelect();
 }
 
+const CSV_ERROR_DEFAULT = "Errore nel caricamento del file. Formati supportati: CSV, XLSX, XLSM, XLS.";
+
 function showCsvError(message) {
   const el = document.getElementById("csvError");
   if (!el) return;
-  if (message) el.textContent = message;
+  el.textContent = message || CSV_ERROR_DEFAULT;
   el.style.display = "block";
 }
 
@@ -762,21 +971,42 @@ function updateCsvLoadStatus(loaded, ignored) {
 
 function aggiornaListinoSelect() {
   const select = document.getElementById("listinoSelect");
-  const searchTerm = document.getElementById("searchListino").value.toLowerCase();
-  select.innerHTML = "";
+  const search = document.getElementById("searchListino");
+  if (!select) return;
+
+  const searchTerm = (search ? search.value : "").trim().toLowerCase();
+
+  // fragment: un solo reflow anche con listini da migliaia di righe (mobile)
+  const frag = document.createDocumentFragment();
+  let trovati = 0;
 
   listino.forEach((item) => {
-    if (item.codice.toLowerCase().includes(searchTerm) || item.descrizione.toLowerCase().includes(searchTerm)) {
+    if (!searchTerm
+      || item.codice.toLowerCase().includes(searchTerm)
+      || item.descrizione.toLowerCase().includes(searchTerm)) {
       const option = document.createElement("option");
       option.value = item.codice;
       option.textContent = `${item.codice} - ${item.descrizione} - €${roundTwo(item.prezzoLordo).toFixed(2)}`;
-      select.appendChild(option);
+      frag.appendChild(option);
+      trovati++;
     }
   });
+
+  select.innerHTML = "";
+
+  if (!trovati) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = listino.length ? "Nessun articolo trovato" : "Nessun listino caricato";
+    option.disabled = true;
+    select.appendChild(option);
+    return;
+  }
+
+  select.appendChild(frag);
 }
 
 function aggiungiArticoloDaListino() {
-  window.track?.add_item_listino?.();
 
   const select = document.getElementById("listinoSelect");
   if (!select.value) return;
@@ -859,8 +1089,8 @@ function renderTabellaArticoli() {
     row.dataset.index = String(index);
 
     row.innerHTML = `
-      <td data-col="codice">${articolo.codice}</td>
-      <td data-col="descrizione">${articolo.descrizione}</td>
+      <td data-col="codice">${escapeHtml(articolo.codice)}</td>
+      <td data-col="descrizione">${escapeHtml(articolo.descrizione)}</td>
 
       <td data-col="prezzoLordo" class="cell-prezzoLordo">${roundTwo(parseDec(articolo.prezzoLordo)).toFixed(2)}€</td>
 
@@ -1007,7 +1237,6 @@ function aggiornaCalcoliRighe() {
 
 // -------------------- RIMOZIONE --------------------
 function rimuoviArticolo(index) {
-  window.track?.remove_item?.();
   articoliAggiunti.splice(index, 1);
   renderTabellaArticoli();
   aggiornaTotaliGenerali();
@@ -1162,7 +1391,6 @@ function calcolaRigaManuale() {
 }
 
 function aggiungiArticoloManuale() {
-  window.track?.add_item_manual?.();
 
   const codice = document.getElementById("manualCodice").value.trim();
   const descrizione = document.getElementById("manualDescrizione").value.trim();
@@ -1338,23 +1566,25 @@ function generaReportTesto() {
   return report;
 }
 
-function inviaReportWhatsApp() {
-  window.track?.report_whatsapp?.({ variant: smartSettings.smartMode ? 'smart' : (smartSettings.showClientDiscount ? 'client_discount' : 'standard') });
-  const report = generaReportTesto();
-  const whatsappUrl = "https://api.whatsapp.com/send?text=" + encodeURIComponent(report);
-  window.open(whatsappUrl, '_blank');
+function reportVuoto() {
+  if (articoliAggiunti.length) return false;
+  alert("Nessun articolo nel preventivo: aggiungi almeno un articolo.");
+  return true;
 }
 
-function generaPDFReport() {
-  window.track?.csv_export?.({ format: smartSettings.smartMode ? 'txt_smart' : (smartSettings.showClientDiscount ? 'txt_client_discount' : 'txt_standard') });
+function inviaReportWhatsApp() {
+  if (reportVuoto()) return;
   const report = generaReportTesto();
-  const blob = new Blob([report], { type: "text/plain" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = smartSettings.smartMode ? "preventivo_smart.txt" : "report.txt";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  mostraAnteprimaReport(report);
+  apriWhatsAppConTesto(report);
+}
+
+// Nome storico mantenuto (usato dall'onclick in index.html): genera il TXT
+function generaPDFReport() {
+  if (reportVuoto()) return;
+  const report = generaReportTesto();
+  mostraAnteprimaReport(report);
+  downloadTextFile(smartSettings.smartMode ? "preventivo_smart.txt" : "report.txt", report);
 }
 
 function generaReportTestoSenzaMargine() {
@@ -1435,20 +1665,15 @@ function generaReportTestoSenzaMargine() {
 }
 
 function inviaReportWhatsAppSenzaMargine() {
-  window.track?.report_whatsapp?.({ variant: smartSettings.smartMode ? 'smart' : (smartSettings.showClientDiscount ? 'client_discount_no_margin' : 'no_margin') });
+  if (reportVuoto()) return;
   const report = generaReportTestoSenzaMargine();
-  const whatsappUrl = "https://api.whatsapp.com/send?text=" + encodeURIComponent(report);
-  window.open(whatsappUrl, '_blank');
+  mostraAnteprimaReport(report);
+  apriWhatsAppConTesto(report);
 }
 
 function generaTXTReportSenzaMargine() {
-  window.track?.csv_export?.({ format: smartSettings.smartMode ? 'txt_smart' : (smartSettings.showClientDiscount ? 'txt_client_discount_no_margin' : 'txt_no_margin') });
+  if (reportVuoto()) return;
   const report = generaReportTestoSenzaMargine();
-  const blob = new Blob([report], { type: "text/plain" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = smartSettings.smartMode ? "preventivo_smart.txt" : "report_senza_margine.txt";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  mostraAnteprimaReport(report);
+  downloadTextFile(smartSettings.smartMode ? "preventivo_smart.txt" : "report_senza_margine.txt", report);
 }
