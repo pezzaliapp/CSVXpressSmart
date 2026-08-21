@@ -92,8 +92,9 @@ try {
   ok('v1: CSS originale attivo', headerColorV1 === 'rgb(33, 150, 243)', headerColorV1);
 
   /* ---------- pubblicazione v2 ---------- */
-  fs.writeFileSync(SW, backup.sw.replace("const CACHE_VERSION = 'v1.4.0';", "const CACHE_VERSION = 'v9.9.9-test';"));
-  fs.writeFileSync(HTML, backup.html.replace('data-ver="1.2.0"', 'data-ver="9.9.9-test"'));
+  // versioni lette dai file, così il test non scade ad ogni rilascio
+  fs.writeFileSync(SW, backup.sw.replace(/const CACHE_VERSION = '[^']+';/, "const CACHE_VERSION = 'v9.9.9-test';"));
+  fs.writeFileSync(HTML, backup.html.replace(/data-ver="[^"]+"/, 'data-ver="9.9.9-test"'));
   fs.writeFileSync(CSS, backup.css.replace('--brand:#2196f3;', '--brand:#123456;'));
   await sleep(300);
 
@@ -141,7 +142,8 @@ try {
   ok('secondo aggiornamento: CSS aggiornato senza intervento manuale', cssV3 === 'rgb(33, 150, 243)', cssV3);
 
   const v3 = await evaluate('caches.keys()');
-  ok('rollback: cache riportata alla versione pubblicata', v3.includes('csvxpresssmart-v1.4.0'), v3);
+  const versionePubblicata = (backup.sw.match(/const CACHE_VERSION = '([^']+)';/) || [])[1];
+  ok('rollback: cache riportata alla versione pubblicata', v3.includes('csvxpresssmart-' + versionePubblicata), { attesa: versionePubblicata, trovate: v3 });
   ok('rollback: nessuna cache residua', v3.length === 1, v3);
   ok('rollback: app funzionante (nessun blocco permanente del SW)',
     await evaluate(`typeof generaPDFReport === 'function' && typeof XLSX !== 'undefined'`) === true);

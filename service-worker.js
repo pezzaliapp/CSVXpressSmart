@@ -2,7 +2,7 @@
 // CSVXpressSmart — Service Worker
 // PWA statica: nessuna richiesta a servizi esterni, tutto same-origin.
 // Versione: bumpare SEMPRE quando cambiano gli asset.
-const CACHE_VERSION = 'v1.4.0';
+const CACHE_VERSION = 'v1.4.1';
 const CACHE_NAME = `csvxpresssmart-${CACHE_VERSION}`;
 
 // Asset locali da cacheare (app shell)

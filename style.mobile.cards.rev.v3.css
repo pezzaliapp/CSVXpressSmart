@@ -21,6 +21,14 @@
 
   /* Tabella “spenta” come tabella: diventa lista di cards */
   #articoli-table{
+    /* ✅ La scatola tabella va spenta davvero: una box `display:table` usa
+       max(width, min-content) e NON è limitata dal contenitore, quindi
+       `width:100%` farebbe solo da minimo. Con la min-content della riga a
+       343px (etichetta 105 + gap 12 + larghezza intrinseca dell'input 192),
+       su schermi da 341-352px (display esterno del Galaxy Fold) la scheda
+       usciva dallo schermo e veniva ritagliata. Da `block` in poi la
+       larghezza torna vincolata al contenitore e gli input si adattano. */
+    display: block !important;
     min-width: 0 !important;
     width: 100% !important;
     border-collapse: separate;
@@ -116,7 +124,11 @@
   }
   #articoli-table td[data-col="azioni"]::before{
     content: "" !important;
-    flex: 0 0 0;
+    /* ✅ senza !important questa regola, pur più specifica, perdeva contro
+       `#articoli-table td::before{ flex: 0 0 120px !important }` (e 105px
+       sotto i 380px): la cella azioni si teneva una colonna-etichetta vuota
+       e il pulsante Rimuovi partiva spostato a destra. */
+    flex: 0 0 0 !important;
   }
   #articoli-table td[data-col="azioni"] button{
     width: 100%;
