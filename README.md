@@ -1,5 +1,9 @@
 # CSVXpressSmart
 
+> **Novità:** è disponibile [Xpress](https://www.alessandropezzali.it/xpress/), la nuova versione
+> con le stesse funzioni più il listino PDF con le foto degli articoli. All'apertura
+> CSVXpressSmart presenta Xpress con un messaggio e una fascia in alto (`xpress-annuncio.js`).
+
 PWA per agenti di vendita: calcola sconti commerciali (Sconto 1, Sconto 2, sconto cliente equivalente) e margini partendo da listini in formato CSV o Excel.
 
 ## Caratteristiche
